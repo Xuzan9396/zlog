@@ -15,6 +15,16 @@ type logsInfo struct {
 	sync.Mutex
 }
 
+type log_config struct {
+	WithMaxAge int  // 保存多久，单位小时
+	WithRotationTime int // 多久切割一次，单位小时
+}
+
+var g_config = log_config{
+	WithMaxAge:10*24,
+	WithRotationTime: 24,
+}
+
 var info *logsInfo
 
 func init()  {
@@ -22,7 +32,14 @@ func init()  {
 		m:make(map[string]*zap.SugaredLogger),
 	}
 }
-
+//  withMaxAge 保留几天
+// withRotationTime 多久切割一次
+func SetConfig(withMaxAge,withRotationTime int )  {
+	g_config = log_config{
+		WithMaxAge:withMaxAge, // 默认 10天保留
+		WithRotationTime: withRotationTime,
+	}
+}
 
 // 传入的函数f有返回值error，如果初始化失败，需要返回失败的error
 // Do方法会把这个error返回给调用者
