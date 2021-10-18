@@ -1,26 +1,20 @@
 # zlog
 封装日志,按照文件分类
 ```go
-package zlog
+package main
 
 import (
-	"testing"
+	"errors"
+	"github.com/Xuzan9396/zlog"
 )
 
-func Test_log(t *testing.T)  {
-
-	i := 1
-
-	for{
-		F("xuzan").Infof("%s","测试下豪不好2")
-		F("xuzan").Errorf("%s","测试下豪不好2")
-		if i >= 1000{
-			break
-		}
-		i++
-		//glg.Infof("in main args:%v", os.Args)
-		//glg.Errorf("eerror %v", "error")
-	}
+func main()  {
+	zlog.
+	zlog.F("xuzan").Info("111")
+	zlog.F("xuzan").Error(errors.New("错误"))
+	zlog.F("xuzan2").Info("111")
+	zlog.F("xuzan2").Error(errors.New("错误"))
 }
+
 
 ```
