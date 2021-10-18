@@ -41,28 +41,6 @@ func SetConfig(withMaxAge,withRotationTime int )  {
 	}
 }
 
-// 传入的函数f有返回值error，如果初始化失败，需要返回失败的error
-// Do方法会把这个error返回给调用者
-//func (o *logsInfo) do(f func() error) error {
-//	if atomic.LoadUint32(&o.done) == 1 { //fast path
-//		return nil
-//	}
-//	return o.slowDo(f)
-//}
-//// 如果还没有初始化
-//func (o *logsInfo) slowDo(f func() error) error {
-//	o.Lock()
-//	defer o.Unlock()
-//	var err error
-//	if o.done == 0 { // 双检查，还没有初始化
-//		err = f()
-//		if err == nil { // 初始化成功才将标记置为已初始化
-//			atomic.StoreUint32(&o.done, 1)
-//		}
-//	}
-//	return err
-//}
-
 
 func (c *logsInfo)getMap(fileName string ) (*zap.SugaredLogger) {
 	info.Lock()
@@ -78,11 +56,15 @@ func (c *logsInfo)getMap(fileName string ) (*zap.SugaredLogger) {
 }
 
 
-func F(fileName string )  *zap.SugaredLogger{
-	if fileName == "" {
-		log.Fatal("文件为空!")
-	}
+func F(fileNameArr ...string )  *zap.SugaredLogger{
+	var fileName string
+	if fileNameArr == nil || len(fileNameArr) <= 0 || fileNameArr[0] == "" {
+		//log.Fatal("文件为空!")
+		fileName = "sign"
+	}else{
+		fileName =fileNameArr[0]
 
+	}
 	return info.getMap(fileName)
 }
 
@@ -138,6 +120,28 @@ func customTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 }
 
 
+
+// 传入的函数f有返回值error，如果初始化失败，需要返回失败的error
+// Do方法会把这个error返回给调用者
+//func (o *logsInfo) do(f func() error) error {
+//	if atomic.LoadUint32(&o.done) == 1 { //fast path
+//		return nil
+//	}
+//	return o.slowDo(f)
+//}
+//// 如果还没有初始化
+//func (o *logsInfo) slowDo(f func() error) error {
+//	o.Lock()
+//	defer o.Unlock()
+//	var err error
+//	if o.done == 0 { // 双检查，还没有初始化
+//		err = f()
+//		if err == nil { // 初始化成功才将标记置为已初始化
+//			atomic.StoreUint32(&o.done, 1)
+//		}
+//	}
+//	return err
+//}
 
 
 
