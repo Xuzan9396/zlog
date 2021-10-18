@@ -1,5 +1,5 @@
 # zlog
-封装日志
+封装日志,按照文件分类
 ```go
 package zlog
 
