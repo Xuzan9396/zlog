@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"log"
 	"sync"
 	"time"
 )
@@ -47,7 +46,7 @@ func (c *logsInfo)getMap(fileName string ) (*zap.SugaredLogger) {
 	defer info.Unlock()
 	m,ok := info.m[fileName]
 	if !ok {
-		log.Println("我执行了几次")
+		//log.Println("我执行了几次")
 		m= getLog(fileName)
 
 		info.m[fileName] = m
