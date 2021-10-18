@@ -10,6 +10,7 @@ import (
 )
 
 func main()  {
+	zlog.SetEnv(zlog.LOG_DEBUG)
 	//zlog.SetConfig(设置保留时间单位小时,设置多久切割一次单位小时) 如果不调用默认 10天 24小时切割一次
 	zlog.F("xuzan").Info("111")
 	zlog.F("xuzan").Error(errors.New("错误"))

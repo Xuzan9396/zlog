@@ -8,20 +8,28 @@ import (
 	"time"
 )
 
+const  (
+	LOG_PRO = "pro"
+	LOG_DEBUG = "debug"
+)
+
+
 //var errorLogger *zap.SugaredLogger
 type logsInfo struct {
 	m map[string]*zap.SugaredLogger
-	sync.Mutex
+	sync.RWMutex
 }
 
 type log_config struct {
 	WithMaxAge int  // 保存多久，单位小时
 	WithRotationTime int // 多久切割一次，单位小时
+	Env string
 }
 
 var g_config = log_config{
 	WithMaxAge:10*24,
 	WithRotationTime: 24,
+	Env:LOG_PRO,
 }
 
 var info *logsInfo
@@ -34,14 +42,24 @@ func init()  {
 //  withMaxAge 保留几天
 // withRotationTime 多久切割一次
 func SetConfig(withMaxAge,withRotationTime int )  {
-	g_config = log_config{
-		WithMaxAge:withMaxAge, // 默认 10天保留
-		WithRotationTime: withRotationTime,
-	}
+	g_config.WithRotationTime = withRotationTime
+	g_config.WithMaxAge = withMaxAge
+}
+
+func SetEnv(env string)  {
+	g_config.Env = env
 }
 
 
-func (c *logsInfo)getMap(fileName string ) (*zap.SugaredLogger) {
+func (c *logsInfo)getMap(fileName string ) (*zap.SugaredLogger,bool) {
+	info.RLock()
+	defer info.RUnlock()
+	m,ok := info.m[fileName]
+	return m,ok
+
+}
+
+func (c *logsInfo)getSetMap(fileName string ) (*zap.SugaredLogger) {
 	info.Lock()
 	defer info.Unlock()
 	m,ok := info.m[fileName]
@@ -64,7 +82,12 @@ func F(fileNameArr ...string )  *zap.SugaredLogger{
 		fileName =fileNameArr[0]
 
 	}
-	return info.getMap(fileName)
+	m,ok :=  info.getMap(fileName)
+	if !ok {
+		m = info.getSetMap(fileName)
+	}
+	return m
+
 }
 
 
@@ -97,7 +120,7 @@ func getLog(name string ) *zap.SugaredLogger{
 	})
 
 	// 获取 info、error日志文件的io.Writer 抽象 getWriter() 在下方实现
-	infoWriter,_ := getWriter_v2(fmt.Sprintf("./logs/%s_info.log",name))
+	infoWriter,_ := getWriter_v1(fmt.Sprintf("./logs/%s_info.log",name))
 	errorWriter,_ := getWriter_v2(fmt.Sprintf("./logs/%s_error.log",name))
 
 	// 最后创建具体的Logger
