@@ -64,7 +64,6 @@ func (c *logsInfo)getSetMap(fileName string ) (*zap.SugaredLogger) {
 	defer info.Unlock()
 	m,ok := info.m[fileName]
 	if !ok {
-		//log.Println("我执行了几次")
 		m= getLog(fileName)
 
 		info.m[fileName] = m
@@ -76,14 +75,13 @@ func (c *logsInfo)getSetMap(fileName string ) (*zap.SugaredLogger) {
 func F(fileNameArr ...string )  *zap.SugaredLogger{
 	var fileName string
 	if fileNameArr == nil || len(fileNameArr) <= 0 || fileNameArr[0] == "" {
-		//log.Fatal("文件为空!")
 		fileName = "sign"
 	}else{
 		fileName =fileNameArr[0]
 
 	}
 	m,ok :=  info.getMap(fileName)
-	if !ok {
+	if !ok || m == nil {
 		m = info.getSetMap(fileName)
 	}
 	return m

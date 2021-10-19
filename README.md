@@ -10,7 +10,7 @@ import (
 )
 
 func main()  {
-	zlog.SetEnv(zlog.LOG_DEBUG)
+	// zlog.SetEnv(zlog.LOG_DEBUG) 正式服可以去掉不输入终端性能提升3倍左右
 	//zlog.SetConfig(设置保留时间单位小时,设置多久切割一次单位小时) 如果不调用默认 10天 24小时切割一次
 	zlog.F("xuzan").Info("111")
 	zlog.F("xuzan").Error(errors.New("错误"))
