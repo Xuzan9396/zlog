@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -117,9 +118,17 @@ func getLog(name string ) *zap.SugaredLogger{
 		return lvl >= zapcore.ErrorLevel
 	})
 
+
 	// 获取 info、error日志文件的io.Writer 抽象 getWriter() 在下方实现
-	infoWriter,_ := getWriter_v1(fmt.Sprintf("./logs/%s_info.log",name))
-	errorWriter,_ := getWriter_v2(fmt.Sprintf("./logs/%s_error.log",name))
+	var infoWriter,errorWriter zapcore.WriteSyncer
+	if runtime.GOOS != "windows" {
+		infoWriter,_ = getWriter_v1(fmt.Sprintf("./logs/%s_info.log",name))
+		errorWriter,_ = getWriter_v2(fmt.Sprintf("./logs/%s_error.log",name))
+	}else{
+		infoWriter,_ = getWriter_v1_win(fmt.Sprintf("./logs/%s_info.log",name))
+		errorWriter,_ = getWriter_v2_win(fmt.Sprintf("./logs/%s_error.log",name))
+	}
+
 
 	// 最后创建具体的Logger
 	core := zapcore.NewTee(
