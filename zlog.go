@@ -144,7 +144,7 @@ func getLog(name string,line uint8 ) *zap.SugaredLogger{
 		zap.AddCaller(),
 	}
 	if line > 0 {
-		caller = append(caller,zap.AddCallerSkip(1))
+		caller = append(caller,zap.AddCallerSkip(2))
 	}
 	//logs := zap.New(core, zap.AddCaller()) // 需要传入 zap.AddCaller() 才会显示打日志点的文件名和行数, 有点小坑
 	logs := zap.New(core, caller...) // 需要传入 zap.AddCaller() 才会显示打日志点的文件名和行数, 有点小坑
