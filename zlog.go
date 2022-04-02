@@ -60,12 +60,12 @@ func (c *logsInfo)getMap(fileName string ) (*zap.SugaredLogger,bool) {
 
 }
 
-func (c *logsInfo)getSetMap(fileName string ) (*zap.SugaredLogger) {
+func (c *logsInfo)getSetMap(fileName string,line uint8 ) (*zap.SugaredLogger) {
 	info.Lock()
 	defer info.Unlock()
 	m,ok := info.m[fileName]
 	if !ok {
-		m= getLog(fileName)
+		m= getLog(fileName,line )
 
 		info.m[fileName] = m
 	}
@@ -75,22 +75,27 @@ func (c *logsInfo)getSetMap(fileName string ) (*zap.SugaredLogger) {
 
 func F(fileNameArr ...string )  *zap.SugaredLogger{
 	var fileName string
-	if fileNameArr == nil || len(fileNameArr) <= 0 || fileNameArr[0] == "" {
-		fileName = "sign"
-	}else{
+	if  len(fileNameArr) > 0 && fileNameArr[0] != "" {
 		fileName =fileNameArr[0]
-
+	}else{
+		fileName = "sign"
 	}
 	m,ok :=  info.getMap(fileName)
 	if !ok || m == nil {
-		m = info.getSetMap(fileName)
+		if len(fileNameArr) > 1 {
+			// 函数晚上一级
+			m = info.getSetMap(fileName,1)
+		}else{
+			m = info.getSetMap(fileName,0)
+		}
 	}
 	return m
 
 }
 
 
-func getLog(name string ) *zap.SugaredLogger{
+
+func getLog(name string,line uint8 ) *zap.SugaredLogger{
 
 	// 设置一些基本日志格式 具体含义还比较好理解，直接看zap源码也不难懂
 	//encoder := zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
@@ -99,7 +104,7 @@ func getLog(name string ) *zap.SugaredLogger{
 		LevelKey:       "level",
 		TimeKey:        "time",
 		NameKey:        "logger",
-		CallerKey:      "caller",
+		CallerKey:      "line",
 		StacktraceKey:  "stacktrace",
 		LineEnding:     zapcore.DefaultLineEnding,
 		EncodeLevel:    zapcore.LowercaseLevelEncoder,
@@ -135,8 +140,14 @@ func getLog(name string ) *zap.SugaredLogger{
 		zapcore.NewCore(encoder, zapcore.AddSync(infoWriter), infoLevel),
 		zapcore.NewCore(encoder, zapcore.AddSync(errorWriter), errorLevel),
 	)
-
-	logs := zap.New(core, zap.AddCaller()) // 需要传入 zap.AddCaller() 才会显示打日志点的文件名和行数, 有点小坑
+	caller := []zap.Option{
+		zap.AddCaller(),
+	}
+	if line > 0 {
+		caller = append(caller,zap.AddCallerSkip(1))
+	}
+	//logs := zap.New(core, zap.AddCaller()) // 需要传入 zap.AddCaller() 才会显示打日志点的文件名和行数, 有点小坑
+	logs := zap.New(core, caller...) // 需要传入 zap.AddCaller() 才会显示打日志点的文件名和行数, 有点小坑
 
 	errorLogger := logs.Sugar()
 	return errorLogger
