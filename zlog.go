@@ -217,3 +217,5 @@ func (c *logsInfo) getLog(name string, line uint8) *zap.SugaredLogger {
 func customTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 	enc.AppendString(t.Format("2006-01-02 15:04:05"))
 }
+
+//git archive --format=zip --prefix=zlog-v0.1.0/ v0.1.0 -o zlog-v0.1.0.zip
