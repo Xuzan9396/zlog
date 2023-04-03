@@ -38,3 +38,32 @@ func getWriteSyncerErr(fileName string) (zapcore.WriteSyncer, error) {
 	)
 	return zapcore.AddSync(fileWriter), err
 }
+
+// 终端通过zap写入文件
+func SetZapOut(fileName string) error {
+
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	fileWriter, err := rotatelogs.New(
+		// %Y-%m-%d %H:%M:%S
+		strings.Replace(fileName, ".log", "", -1)+"%Y-%m-%d.log", // 没有使用go风格反人类的format格式
+		rotatelogs.WithRotationCount(7),                          // 做多保存多少分
+		rotatelogs.WithRotationSize(1024*1024*10),                // 10MB切割 , WithRotationSize  和 WithRotationTime 互斥
+	)
+	// 测试环境，则终端和文件都写入
+	var w zapcore.WriteSyncer
+	if getConfig().Env == "pro" {
+		// 只写入文件
+		w = zapcore.AddSync(fileWriter)
+
+	} else {
+		// 测试环境，则终端和文件都写入
+		w, err = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(fileWriter)), err
+		if err != nil {
+			return err
+		}
+	}
+	log.SetOutput(w)
+	return nil
+
+}

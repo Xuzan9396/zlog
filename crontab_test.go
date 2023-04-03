@@ -2,6 +2,8 @@ package zlog
 
 import (
 	"fmt"
+	"log"
+	"runtime/debug"
 	"strconv"
 	"testing"
 	"time"
@@ -112,4 +114,21 @@ func Test_logv5(t *testing.T) {
 	}
 
 	select {}
+}
+
+func Test_logv6(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println(r, string(debug.Stack()))
+		}
+	}()
+
+	// 将日志输出到文件
+	_ = SetZapOut("./logs/sys_log")
+	go func() {
+		log.Printf("%s", "测试下sss")
+	}()
+	log.Println("set zap test")
+	panic("232323")
+	<-time.After(2 * time.Second)
 }
