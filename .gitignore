@@ -18,3 +18,5 @@ logs/
 # vendor/
 
 *.zip
+
+.DS_Store
