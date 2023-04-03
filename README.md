@@ -1,6 +1,14 @@
 # zlog,基于zap日志包装，快速使用
 ### 使用场景，有的时候我们需要不同的业务去设置不同日志文件，方便我们快速定位，需要我们随时使用时启动，不需要太多重复性的配置说明，开箱即用
 
+### 效果展示
+```
+zlog.F("xuzan").Info("111") // 会生成xuzan_info.log 文件软链
+zlog.F("xuzan").Error(errors.New("我这边报错了")) 会在xuzan_info.log 插入一条error, 也会在 sign_error.log 插入一条数据
+zlog.F().Info("111")  // 会生成 sign_info.log 日志软链
+zlog.F().Error(errors.New("我这边报错了")) // 会在sign_info.log 插入一条error, 也会在 sign_error.log 插入一条数据
+```
+
 ### zlog,是一个根据官方zap高性能日志再封装的一个日志系统，包含日志自动切割，包含自定义日志文件名，启动不需要提前一大推声明，包含
 
 ### 简单的配置
