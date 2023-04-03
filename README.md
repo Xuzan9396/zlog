@@ -8,6 +8,8 @@ zlog.F("xuzan").Error(errors.New("我这边报错了")) 会在xuzan_info.log 插
 zlog.F().Info("111")  // 会生成 sign_info.log 日志软链
 zlog.F().Error(errors.New("我这边报错了")) // 会在sign_info.log 插入一条error, 也会在 sign_error.log 插入一条数据
 ```
+<img width="321" alt="image" src="https://user-images.githubusercontent.com/24741439/229480596-0b531d38-689f-4867-a48b-2faaeb446d1b.png">
+
 
 ### zlog,是一个根据官方zap高性能日志再封装的一个日志系统，包含日志自动切割，包含自定义日志文件名，启动不需要提前一大推声明，包含
 
