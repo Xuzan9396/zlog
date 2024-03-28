@@ -1,10 +1,19 @@
 # zlog,基于zap日志包装，快速使用
 ### 使用场景，有的时候我们需要不同的业务去设置不同日志文件，方便我们快速定位，需要我们随时使用时启动，不需要太多重复性的配置说明，开箱即用
 
-### v0.1.2 版本更新
+### [v0.1.2] 版本更新
 - 新增 WithDate(DATE_MSEC) 日期格式化没有设置为秒，新增了毫秒时间
 - 清理logs 目录下面长期没打开过的文件
 - zlog.WatchErr() 返回一个chan 会返回 ch ，返回所Error 错误级别的日志文件
+
+## [0.1.1] - 2023-04-03
+### 添加
+- zlog.SetLog(zlog.ENV_DEBUG, zlog.WithMaxAge(10*24), zlog.WithRotationTime(24))  环境，存活时间，和切分时间
+- zlog.SetZapOut("./logs/sys_log") // 系统日志读取通过zap形式输入到日志和终端，正式环境只会写文件，测试环境会写日志和终端输出, 并且自动切分
+
+### 修改
+- 废弃zlog.SetConfig()
+- 废弃每个文件生成error多个日志,合并成一个sign_error日志
 
 ### 效果展示
 ```
@@ -36,14 +45,7 @@ zlog.SetLog(zlog.ENV_DEBUG, zlog.WithMaxAge(10*24), zlog.WithRotationTime(24))
 #### 封装日志生成说明,按照文件分类,有软件接和切分文件
 下面例子：会在当前项目logs文件下面生成 xuzan_info.log 和 xuzan_error.log 为软连接，具体文件是带天数的时间  如果是调用error级别函数，则在 _error.log 存一份错误，在_info.log存一份，如只调用了info级别则在_info.log 存一份
 
-## [0.1.1] - 2023-04-03
-### 添加
-- zlog.SetLog(zlog.ENV_DEBUG, zlog.WithMaxAge(10*24), zlog.WithRotationTime(24))  环境，存活时间，和切分时间
-- zlog.SetZapOut("./logs/sys_log") // 系统日志读取通过zap形式输入到日志和终端，正式环境只会写文件，测试环境会写日志和终端输出, 并且自动切分
 
-### 修改
-- 废弃zlog.SetConfig()
-- 废弃每个文件生成error多个日志,合并成一个sign_error日志
 
 ```go
 package main
