@@ -5,21 +5,31 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"os"
+	"path/filepath"
+	"regexp"
+	"runtime"
 	"runtime/debug"
 	"sync"
 	"time"
 )
 
 type Env string
-
+type EnvDate string // 时间格式
 const (
 	LOG_PRO       = "pro"
 	LOG_DEBUG     = "debug"
 	ENV_PRO   Env = "pro"
 	ENV_DEBUG Env = "debug"
+	// 秒模版
+	DATE_SEC EnvDate = "2006-01-02 15:04:05"
+	// 毫秒模版
+	DATE_MSEC EnvDate = "2006-01-02 15:04:05.000"
 )
 
-//var errorLogger *zap.SugaredLogger
+var LOC, _ = time.LoadLocation("Local")
+
+// var errorLogger *zap.SugaredLogger
 type logsInfo struct {
 	m map[string]*zap.SugaredLogger
 	sync.RWMutex
@@ -30,13 +40,16 @@ type log_config struct {
 	WithMaxAge       int // 保存多久，单位小时
 	WithRotationTime int // 多久切割一次，单位小时
 	Env              Env
+	formDate         EnvDate // 毫秒或者s 模版 2006-01-02 15:04:05.000
+	//one sync.Once
 }
 type LogOption func(*log_config)
 
 var g_config = &log_config{
-	WithMaxAge:       10 * 24, // 保留日志最大天数
-	WithRotationTime: 24,      // 相隔多少个小时切割一次
-	Env:              ENV_PRO, // 正式和测试，默认正式环境
+	WithMaxAge:       10 * 24,  // 保留日志最大天数
+	WithRotationTime: 24,       // 相隔多少个小时切割一次
+	Env:              ENV_PRO,  // 正式和测试，默认正式环境
+	formDate:         DATE_SEC, // 默认s
 }
 
 var info *logsInfo
@@ -45,6 +58,107 @@ func init() {
 	info = &logsInfo{
 		m: make(map[string]*zap.SugaredLogger),
 	}
+	// 清理没有打开的日志
+	clearLog()
+}
+
+// 清理过期日志
+func clearLog() {
+	var dirFile string
+	if runtime.GOOS != "windows" {
+		dirFile = "./logs/"
+	} else {
+		dirFile = ".\\logs\\"
+	}
+	// 先为目录下现有的日志文件启动监听
+	initialFiles, err := filepath.Glob(dirFile + "*20*.log")
+	if err != nil {
+		return
+	}
+	ruanFileMap := make(map[string]struct{})
+	// 需要排查的文件
+	excludeRuanFileMap := make(map[string]struct{})
+	for _, logFileName := range initialFiles {
+		prefixName, ts, err := getLogDate(logFileName)
+		if err != nil {
+			continue
+		}
+		now := time.Now() // 确保now使用和ts相同的时区
+
+		// 获取当前时间的年、月、日部分，并将小时、分钟、秒和纳秒设置为0，以便进行日期比较
+		midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, LOC)
+
+		if midnight.Sub(*ts) > time.Duration(getConfig().WithMaxAge+24)*time.Hour {
+			// 超过
+			//t.Log("超过11天")
+			// 删除文件
+			removeFile(logFileName)
+			if prefixName != "" {
+				ruanFileName := fmt.Sprintf("%s.log", prefixName)
+				if _, ok := ruanFileMap[ruanFileName]; !ok {
+					ruanFileMap[ruanFileName] = struct{}{}
+				}
+			}
+
+		} else {
+			// 以内的
+			if prefixName != "" {
+				excluderuanFileName := fmt.Sprintf("%s.log", prefixName)
+				if _, ok := excludeRuanFileMap[excluderuanFileName]; !ok {
+					excludeRuanFileMap[excluderuanFileName] = struct{}{}
+				}
+			}
+		}
+
+	}
+
+	// 去掉排除的，然后删掉其他的
+	for k := range ruanFileMap {
+		_, ok := excludeRuanFileMap[k]
+		if ok {
+			continue
+		}
+		//log.Println("删除文件22", k)
+		removeFile(k)
+	}
+}
+
+// 修改getLogDate函数以同时返回文件名前缀和日期
+func getLogDate(logFileName string) (prefix string, logDate *time.Time, err error) {
+	// 使用正则表达式同时匹配文件名前缀和固定格式的日期：YYYY-MM-DD
+	// 分组1匹配前缀，分组2匹配日期
+	re := regexp.MustCompile(`^(.*?)(\d{4}-\d{2}-\d{2})\.log$`)
+
+	// 在字符串中查找匹配的日期和前缀
+	match := re.FindStringSubmatch(logFileName)
+	if match == nil {
+		return "", nil, errors.New("no date found in string")
+	}
+	if len(match) != 3 {
+		return "", nil, errors.New("unexpected number of matches")
+
+	}
+
+	// 解析日期
+	const layout = "2006-01-02"
+
+	ts, err := time.ParseInLocation(layout, match[2], LOC)
+
+	if err != nil {
+		return match[1], &ts, err
+	}
+
+	return match[1], &ts, nil
+}
+
+func removeFile(file string) error {
+	// 删除文件
+	err := os.Remove(file)
+	if err != nil {
+		return err
+
+	}
+	return nil
 }
 
 func getConfig() *log_config {
@@ -63,13 +177,20 @@ func WithRotationTime(withRotationTime int) LogOption {
 	}
 }
 
-//Deprecated
+// 设置时间格式
+func WithDate(date EnvDate) LogOption {
+	return func(obj *log_config) {
+		obj.formDate = date
+	}
+}
+
+// Deprecated
 func SetConfig(withMaxAge, withRotationTime int) {
 	g_config.WithRotationTime = withRotationTime
 	g_config.WithMaxAge = withMaxAge
 }
 
-//Deprecated: use LogConfig
+// Deprecated: use LogConfig
 func SetEnv(env string) {
 	g_config.Env = Env(env)
 }
@@ -215,7 +336,7 @@ func (c *logsInfo) getLog(name string, line uint8) *zap.SugaredLogger {
 
 // 自定义日志输出时间格式
 func customTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
-	enc.AppendString(t.Format("2006-01-02 15:04:05"))
+	enc.AppendString(t.Format(string(g_config.formDate)))
 }
 
 //git archive --format=zip --prefix=zlog-v0.1.0/ v0.1.0 -o zlog-v0.1.0.zip

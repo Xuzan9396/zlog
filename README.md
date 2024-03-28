@@ -1,6 +1,11 @@
 # zlog,基于zap日志包装，快速使用
 ### 使用场景，有的时候我们需要不同的业务去设置不同日志文件，方便我们快速定位，需要我们随时使用时启动，不需要太多重复性的配置说明，开箱即用
 
+### v0.1.2 版本更新
+- 新增 WithDate(DATE_MSEC) 日期格式化没有设置为秒，新增了毫秒时间
+- 清理logs 目录下面长期没打开过的文件
+- zlog.WatchErr() 返回一个chan 会返回 ch ，返回所Error 错误级别的日志文件
+
 ### 效果展示
 ```
 zlog.F("xuzan").Info("111") // 会生成xuzan_info.log 文件软链
@@ -52,6 +57,8 @@ func main()  {
 
 	//zlog.SetConfig(设置保留时间单位小时,设置多久切割一次单位小时) 如果不调用默认 10天 24小时切割一次
 	zlog.SetLog(zlog.ENV_DEBUG, zlog.WithMaxAge(10*24), zlog.WithRotationTime(24))
+	// 设置毫秒
+	// WithDate(DATE_MSEC) 日期格式化没有设置为秒，新增了毫秒时间
 	zlog.F("xuzan").Info("111")
 	zlog.Info("111") // 默认sign 文件
 	zlog.F("xuzan").Error(errors.New("错误"))
@@ -62,4 +69,42 @@ func main()  {
 // 会在logs 文件下面生成 xuzan_info.log 和 xuzan_error.log 为软连接，具体文件是带天数的时间  如果是调用error级别函数，则在 _error.log 存一份错误，在_info.log存一份
 // 不填写默认名，默认写入sign_xxx.log 文件
 
+```
+
+
+### 错误日志监控开启
+```go
+package main
+
+import (
+	"github.com/Xuzan9396/zlog"
+	"log"
+	"time"
+)
+
+func main() {
+	//zlog.SetLog(zlog.ENV_DEBUG)
+
+	go func() {
+		i := 1
+		for {
+			time.Sleep(time.Second)
+			i++
+			zlog.F().Errorf("测试下错误监听:%d", i)
+		}
+	}()
+
+	ch, err := zlog.WatchErr()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	for {
+		select {
+		case name := <-ch:
+			log.Println("文件变化:", name)
+		}
+	}
+}
 ```

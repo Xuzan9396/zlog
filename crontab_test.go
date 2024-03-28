@@ -54,7 +54,7 @@ func Test_logv3(t *testing.T) {
 
 	i := 1
 	//SetEnv(LOG_PRO)
-	SetLog(ENV_DEBUG, WithMaxAge(10*24), WithRotationTime(24))
+	SetLog(ENV_DEBUG, WithMaxAge(10*24), WithRotationTime(24), WithDate(DATE_MSEC))
 	for {
 		F().Infof("%s", "测试下好不好"+strconv.Itoa(i))
 		F().Debugf("%s", "debug测试下好不好"+strconv.Itoa(i))
