@@ -9,7 +9,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
+	"runtime/debug"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -18,7 +19,28 @@ var watch chan string
 var allctx context.Context
 var allcancel context.CancelFunc
 var curTailNum uint32
-var watchdirFile string
+
+func WatchErrCallback(callback func(msg string)) error {
+	watchch, err := WatchErr()
+	if err != nil {
+		return err
+	}
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				fmt.Println("panic:", string(debug.Stack()))
+			}
+		}()
+		for {
+			select {
+			case msg := <-watchch:
+				callback(msg)
+			}
+		}
+	}()
+	return nil
+
+}
 
 func WatchErr() (chan string, error) {
 	watcher, err := fsnotify.NewWatcher()
@@ -28,11 +50,7 @@ func WatchErr() (chan string, error) {
 	//defer watcher.Close()
 	watch = make(chan string, 10)
 	//defer close(watch)
-	if runtime.GOOS != "windows" {
-		watchdirFile = "./logs/"
-	} else {
-		watchdirFile = ".\\logs\\"
-	}
+	watchdirFile := dirpath
 	ensureDir(watchdirFile)
 	err = runtailGo(watchdirFile)
 	if err != nil {
@@ -49,8 +67,8 @@ func WatchErr() (chan string, error) {
 				}
 				// 检查是否是新增文件 || event.Op&fsnotify.Remove == fsnotify.Remove
 				if event.Op&fsnotify.Create == fsnotify.Create {
-					if filepath.Ext(event.Name) == ".log" {
-						//log.Println("detected file:", event.Name)
+					if filepath.Ext(event.Name) == ".log" && strings.Contains(event.Name, "sign_error20") {
+						//fmt.Println("detected file:", event.Name)
 						runtailGo(watchdirFile)
 					}
 				}
@@ -90,10 +108,9 @@ func runtailGo(dirFile string) error {
 		}
 		if allcancel != nil {
 			allcancel()
-			time.Sleep(time.Second)
+			allcancel = nil
 		}
 		if ts.Format("2006-01-02") == nowDay {
-
 			allctx, allcancel = context.WithCancel(context.Background())
 			go tailLogFile(allctx, logFileName)
 		}

@@ -28,6 +28,7 @@ const (
 )
 
 var LOC, _ = time.LoadLocation("Local")
+var dirpath string
 
 // var errorLogger *zap.SugaredLogger
 type logsInfo struct {
@@ -55,6 +56,11 @@ var g_config = &log_config{
 var info *logsInfo
 
 func init() {
+	if runtime.GOOS != "windows" {
+		dirpath = "./logs/"
+	} else {
+		dirpath = ".\\logs\\"
+	}
 	info = &logsInfo{
 		m: make(map[string]*zap.SugaredLogger),
 	}
@@ -64,14 +70,11 @@ func init() {
 
 // 清理过期日志
 func clearLog() {
-	var dirFile string
-	if runtime.GOOS != "windows" {
-		dirFile = "./logs/"
-	} else {
-		dirFile = ".\\logs\\"
-	}
+	//var dirFile string
+
+	dirFile := dirpath
 	// 先为目录下现有的日志文件启动监听
-	initialFiles, err := filepath.Glob(dirFile + "*20*.log")
+	initialFiles, err := filepath.Glob(dirFile + "*20*.log*")
 	if err != nil {
 		return
 	}
@@ -127,7 +130,7 @@ func clearLog() {
 func getLogDate(logFileName string) (prefix string, logDate *time.Time, err error) {
 	// 使用正则表达式同时匹配文件名前缀和固定格式的日期：YYYY-MM-DD
 	// 分组1匹配前缀，分组2匹配日期
-	re := regexp.MustCompile(`^(.*?)(\d{4}-\d{2}-\d{2})\.log$`)
+	re := regexp.MustCompile(`^(.*?)(\d{4}-\d{2}-\d{2})\.log(?:\.\d+)?$`)
 
 	// 在字符串中查找匹配的日期和前缀
 	match := re.FindStringSubmatch(logFileName)
@@ -214,7 +217,7 @@ func F(fileNameArr ...string) *zap.SugaredLogger {
 	m, ok := info.getMap(fileName)
 	if !ok || m == nil {
 		if len(fileNameArr) > 1 {
-			// 函数晚上一级
+			// 函数往上一级
 			m = info.getSetMap(fileName, 1)
 		} else {
 			m = info.getSetMap(fileName, 0)
@@ -300,19 +303,16 @@ func (c *logsInfo) getLog(name string, line uint8) *zap.SugaredLogger {
 
 	// 获取 info、error日志文件的io.Writer 抽象 getWriter() 在下方实现
 	var infoWriter zapcore.WriteSyncer
-	//if runtime.GOOS != "windows" {
 	// 主要错误日志写两份
-	infoWriter, _ = getWriteSyncerInfo(fmt.Sprintf("./logs/%s_info.log", name))
-	//errorWriter, _ = getWriteSyncerErr(fmt.Sprintf("./logs/%s_error.log", name)) // 这个主要 error错误在info和 error里面都写一份
+	// 如果是windows系统，需要修改路径
+
+	infoWriter, _ = getWriteSyncerInfo(fmt.Sprintf("%s%s_info.log", dirpath, name))
 
 	if !c.errorTrue {
-		errorWriter, _ = getWriteSyncerErr("./logs/sign_error.log") // 这个主要 error错误在info和 error里面都写一份
+
+		errorWriter, _ = getWriteSyncerErr(dirpath + "sign_error.log") // 这个主要 error错误在info和 error里面都写一份
 		c.errorTrue = true
 	}
-	//} else {
-	//	infoWriter, _ = getWriter_v1_win(fmt.Sprintf("./logs/%s_info.log", name))
-	//	errorWriter, _ = getWriter_v2_win(fmt.Sprintf("./logs/%s_error.log", name))
-	//}
 
 	// 最后创建具体的Logger
 	core := zapcore.NewTee(
