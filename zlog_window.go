@@ -6,6 +6,7 @@ package zlog
 import (
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"go.uber.org/zap/zapcore"
+	"log"
 	"os"
 	"strings"
 	"time"
