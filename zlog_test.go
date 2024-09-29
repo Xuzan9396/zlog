@@ -1,6 +1,7 @@
 package zlog
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -35,4 +36,25 @@ func Test_getLogDate(t *testing.T) {
 
 func Test_clearLog(t *testing.T) {
 	clearLog()
+}
+
+// 动态level 测试
+func TestNewAtomicLevelAt(t *testing.T) {
+	i := 1
+
+	//SetEnv(LOG_PRO)
+	//SetLog(ENV_DEBUG)
+	for {
+		F().Debugf("%s", "测试下好不好"+strconv.Itoa(i))
+		if i >= 200 {
+			//atomicLevel.SetLevel(zapcore.DebugLevel)
+			SetDebugLevel()
+		}
+		if i >= 1000 {
+			break
+		}
+
+		i++
+	}
+	time.Sleep(5 * time.Second)
 }

@@ -121,7 +121,6 @@ func clearLog() {
 		if ok {
 			continue
 		}
-		//log.Println("删除文件22", k)
 		removeFile(k)
 	}
 }
@@ -245,6 +244,11 @@ func Sync(fileName string) error {
 
 }
 
+// 中途可以修改日志等级
+func SetDebugLevel() {
+	atomicLevel.SetLevel(zap.DebugLevel) // 通过atomicLevel动态修改日志级别
+}
+
 // -------------------------  以下内部调用  -----------------------
 
 func (c *logsInfo) getMap(fileName string) (*zap.SugaredLogger, bool) {
@@ -268,7 +272,7 @@ func (c *logsInfo) getSetMap(fileName string, line uint8) *zap.SugaredLogger {
 }
 
 var errorWriter zapcore.WriteSyncer
-
+var atomicLevel = zap.NewAtomicLevelAt(zapcore.InfoLevel) // 全局的AtomicLevel控制器
 func (c *logsInfo) getLog(name string, line uint8) *zap.SugaredLogger {
 
 	// 设置一些基本日志格式 具体含义还比较好理解，直接看zap源码也不难懂
@@ -288,18 +292,30 @@ func (c *logsInfo) getLog(name string, line uint8) *zap.SugaredLogger {
 		EncodeCaller: zapcore.ShortCallerEncoder, // 相对路径
 	})
 
-	// 实现两个判断日志等级的interface
-	infoLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-		if g_config.Env == ENV_PRO {
-			return lvl >= zapcore.InfoLevel
-		} else {
-			return lvl >= zapcore.DebugLevel
-		}
-	})
+	// 判断环境，初始化日志级别
+	var zapLevel zapcore.Level
+	if g_config.Env == ENV_PRO {
+		zapLevel = zapcore.InfoLevel
+	} else {
+		zapLevel = zapcore.DebugLevel
+	}
+	atomicLevel.SetLevel(zapLevel) // 动态设置初始日志级别
 
-	errorLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-		return lvl >= zapcore.ErrorLevel
-	})
+	//if err := zapLevel.UnmarshalText([]byte(opts.Level)); err != nil {
+	//	zapLevel = zapcore.InfoLevel
+	//}
+	//// 实现两个判断日志等级的interface
+	//infoLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+	//	if g_config.Env == ENV_PRO {
+	//		return lvl >= zapcore.InfoLevel
+	//	} else {
+	//		return lvl >= zapcore.DebugLevel
+	//	}
+	//})
+
+	//errorLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+	//	return lvl >= zapcore.ErrorLevel
+	//})
 
 	// 获取 info、error日志文件的io.Writer 抽象 getWriter() 在下方实现
 	var infoWriter zapcore.WriteSyncer
@@ -316,8 +332,8 @@ func (c *logsInfo) getLog(name string, line uint8) *zap.SugaredLogger {
 
 	// 最后创建具体的Logger
 	core := zapcore.NewTee(
-		zapcore.NewCore(encoder, zapcore.AddSync(infoWriter), infoLevel),
-		zapcore.NewCore(encoder, zapcore.AddSync(errorWriter), errorLevel),
+		zapcore.NewCore(encoder, zapcore.AddSync(infoWriter), atomicLevel), // 之前是infoLevel
+		zapcore.NewCore(encoder, zapcore.AddSync(errorWriter), zapcore.ErrorLevel),
 	)
 
 	caller := []zap.Option{
@@ -328,9 +344,8 @@ func (c *logsInfo) getLog(name string, line uint8) *zap.SugaredLogger {
 	}
 
 	//logs := zap.New(core, zap.AddCaller()) // 需要传入 zap.AddCaller() 才会显示打日志点的文件名和行数, 有点小坑
-	errorLogger := zap.New(core, caller...).Sugar() // 需要传入 zap.AddCaller() 才会显示打日志点的文件名和行数, 有点小坑
-	//errorLogger.Sync() // 落盘
-	return errorLogger
+	allLogger := zap.New(core, caller...).Sugar() // 需要传入 zap.AddCaller() 才会显示打日志点的文件名和行数, 有点小坑
+	return allLogger
 
 }
 

@@ -13,19 +13,15 @@ func Test_log(t *testing.T) {
 
 	i := 1
 
-	SetEnv(LOG_PRO)
+	//SetEnv(LOG_PRO)
 	for {
-		F().Infof("%s", "测试下好不好"+strconv.Itoa(i))
+		F().Errorf("%s", "测试下好不好"+strconv.Itoa(i))
 		//F("xuzan2").Error(errors.New("错误"))
 		if i >= 1000 {
 			break
 		}
-		t.Log(i, F() == nil, F())
-		time.Sleep(1 * time.Second)
 
 		i++
-		//glg.Infof("in main args:%v", os.Args)
-		//glg.Errorf("eerror %v", "error")
 	}
 	time.Sleep(5 * time.Second)
 }
