@@ -12,6 +12,7 @@ import (
 	"runtime/debug"
 	"sync"
 	"time"
+	_ "time/tzdata"
 )
 
 type Env string
@@ -27,7 +28,8 @@ const (
 	DATE_MSEC EnvDate = "2006-01-02 15:04:05.000"
 )
 
-var LOC, _ = time.LoadLocation("Local")
+// var LOC, _ = time.LoadLocation("Local")
+var LOC, _ = time.LoadLocation("Asia/Kolkata")
 var dirpath string
 
 // var errorLogger *zap.SugaredLogger
@@ -351,6 +353,7 @@ func (c *logsInfo) getLog(name string, line uint8) *zap.SugaredLogger {
 
 // 自定义日志输出时间格式
 func customTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+	t = t.In(LOC)
 	enc.AppendString(t.Format(string(g_config.formDate)))
 }
 
