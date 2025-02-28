@@ -28,8 +28,9 @@ const (
 	DATE_MSEC EnvDate = "2006-01-02 15:04:05.000"
 )
 
-// var LOC, _ = time.LoadLocation("Local")
-var LOC, _ = time.LoadLocation("Asia/Kolkata")
+var LOC, _ = time.LoadLocation("Local")
+
+// var LOC, _ = time.LoadLocation("Asia/Kolkata")
 var dirpath string
 
 // var errorLogger *zap.SugaredLogger
