@@ -4,65 +4,58 @@
 package zlog
 
 import (
-	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
-	"go.uber.org/zap/zapcore"
 	"log"
 	"os"
 	"strings"
 	"time"
+
+	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
+	"go.uber.org/zap/zapcore"
 )
 
-func getWriteSyncerInfo(fileName string) (zapcore.WriteSyncer, error) {
+// newInfoWriter 创建 Windows 平台上的 info 日志写入器。
+func newInfoWriter(cfg Config, fileName string) (zapcore.WriteSyncer, error) {
 	fileWriter, err := rotatelogs.New(
-		// %Y-%m-%d %H:%M:%S
-		strings.Replace(fileName, ".log", "", -1)+"%Y-%m-%d.log",                        // 没有使用go风格反人类的format格式
-		rotatelogs.WithMaxAge(time.Duration(g_config.WithMaxAge)*time.Hour),             // 保存最大的时间
-		rotatelogs.WithRotationTime(time.Duration(g_config.WithRotationTime)*time.Hour), // 切割时间
+		strings.Replace(fileName, ".log", "", -1)+"%Y-%m-%d.log",
+		rotatelogs.WithMaxAge(time.Duration(cfg.WithMaxAge)*time.Hour),
+		rotatelogs.WithRotationTime(time.Duration(cfg.WithRotationTime)*time.Hour),
 	)
-	if getConfig().Env == "pro" {
-		// 只写入文件
-		return zapcore.AddSync(fileWriter), err
-	} else {
-		// 测试环境，则终端和文件都写入
+	if cfg.Env == ENV_DEBUG {
 		return zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(fileWriter)), err
 	}
+	return zapcore.AddSync(fileWriter), err
 }
 
-func getWriteSyncerErr(fileName string) (zapcore.WriteSyncer, error) {
+// newErrorWriter 创建 Windows 平台上的 error 日志写入器。
+func newErrorWriter(cfg Config, fileName string) (zapcore.WriteSyncer, error) {
 	fileWriter, err := rotatelogs.New(
-		// %Y-%m-%d %H:%M:%S
-		strings.Replace(fileName, ".log", "", -1)+"%Y-%m-%d.log",                        // 没有使用go风格反人类的format格式
-		rotatelogs.WithMaxAge(time.Duration(g_config.WithMaxAge)*time.Hour),             // 保存最大的时间
-		rotatelogs.WithRotationTime(time.Duration(g_config.WithRotationTime)*time.Hour), // 切割时
+		strings.Replace(fileName, ".log", "", -1)+"%Y-%m-%d.log",
+		rotatelogs.WithMaxAge(time.Duration(cfg.WithMaxAge)*time.Hour),
+		rotatelogs.WithRotationTime(time.Duration(cfg.WithRotationTime)*time.Hour),
 	)
 	return zapcore.AddSync(fileWriter), err
 }
 
-// 终端通过zap写入文件
-func SetZapOut(fileName string) error {
+// SetZapOut 将标准库 log 输出重定向到滚动日志。
+func (m *Manager) SetZapOut(fileName string) error {
+	cfg := m.getConfig()
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	fileWriter, err := rotatelogs.New(
-		// %Y-%m-%d %H:%M:%S
-		strings.Replace(fileName, ".log", "", -1)+"%Y-%m-%d.log", // 没有使用go风格反人类的format格式
-		rotatelogs.WithRotationCount(7),                          // 做多保存多少分
-		rotatelogs.WithRotationSize(1024*1024*10),                // 10MB切割 , WithRotationSize  和 WithRotationTime 互斥
+		strings.Replace(fileName, ".log", "", -1)+"%Y-%m-%d.log",
+		rotatelogs.WithRotationCount(7),
+		rotatelogs.WithRotationSize(1024*1024*10),
 	)
-	// 测试环境，则终端和文件都写入
 	var w zapcore.WriteSyncer
-	if getConfig().Env == "pro" {
-		// 只写入文件
-		w = zapcore.AddSync(fileWriter)
-
-	} else {
-		// 测试环境，则终端和文件都写入
+	if cfg.Env == ENV_DEBUG {
 		w, err = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(fileWriter)), err
 		if err != nil {
 			return err
 		}
+	} else {
+		w = zapcore.AddSync(fileWriter)
 	}
 	log.SetOutput(w)
 	return nil
-
 }

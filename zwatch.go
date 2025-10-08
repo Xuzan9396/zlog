@@ -1,25 +1,30 @@
 package zlog
 
-// 监听发送错误日志
 import (
 	"context"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
-	"github.com/nxadm/tail"
 	"io"
-	"os"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/nxadm/tail"
 )
 
+// watch 作为共享管道传递错误日志行。
 var watch chan string
+
+// allctx / allcancel 管理当前 tail 协程的生命周期，确保只有最新文件在监听。
 var allctx context.Context
 var allcancel context.CancelFunc
+
+// curTailNum 记录并发 tail 协程数量，便于测试和调试。
 var curTailNum uint32
 
+// WatchErrCallback 监听错误日志并在每条日志到来时触发回调。
 func WatchErrCallback(callback func(msg string)) error {
 	watchch, err := WatchErr()
 	if err != nil {
@@ -42,6 +47,7 @@ func WatchErrCallback(callback func(msg string)) error {
 
 }
 
+// WatchErr 返回一个通道，用于实时消费 sign_error 日志内容。
 func WatchErr() (chan string, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -50,7 +56,7 @@ func WatchErr() (chan string, error) {
 	//defer watcher.Close()
 	watch = make(chan string, 10)
 	//defer close(watch)
-	watchdirFile := dirpath
+	watchdirFile := logDir()
 	ensureDir(watchdirFile)
 	err = runtailGo(watchdirFile)
 	if err != nil {
@@ -91,15 +97,16 @@ func WatchErr() (chan string, error) {
 
 }
 
+// runtailGo 为匹配的错误日志文件启动 tail 协程。
 func runtailGo(dirFile string) error {
 
 	// 先为目录下现有的日志文件启动监听
-	initialFiles, err := filepath.Glob(dirFile + "sign_error20*.log")
+	initialFiles, err := filepath.Glob(filepath.Join(dirFile, "sign_error20*.log"))
 	if err != nil {
 		return err
 	}
 	now := time.Now()
-	nowDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, LOC).Format("2006-01-02")
+	nowDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, location).Format("2006-01-02")
 
 	for _, logFileName := range initialFiles {
 		_, ts, err := getLogDate(logFileName)
@@ -118,7 +125,7 @@ func runtailGo(dirFile string) error {
 	return nil
 }
 
-// tailLogFile 用于启动一个新的协程来监听指定的日志文件
+// tailLogFile 启动协程监听指定文件尾部，并写入 watch 通道。
 func tailLogFile(ctx context.Context, filepath string) {
 	//log.Println("开始监听日志文件:", filepath)
 	t, err := tail.TailFile(filepath, tail.Config{Follow: true, ReOpen: true, Location: &tail.SeekInfo{Offset: 0, Whence: io.SeekEnd}})
@@ -138,27 +145,4 @@ func tailLogFile(ctx context.Context, filepath string) {
 			watch <- line.Text
 		}
 	}
-}
-func ensureDir(dirName string) error {
-	// 尝试获取目录的状态，判断目录是否存在
-	infos, err := os.Stat(dirName)
-
-	// 如果因为目录不存在而报错，则创建目录
-	if os.IsNotExist(err) {
-		// 使用MkdirAll而不是Mkdir，以确保创建所有必要的父目录
-		return os.MkdirAll(dirName, 0755) // 使用适当的权限
-	}
-
-	// 如果有其他错误，返回错误
-	if err != nil {
-		return err
-	}
-
-	// 确保dirName确实是一个目录
-	if !infos.IsDir() {
-		return os.ErrExist // 或者你可以返回一个更具体的错误
-	}
-
-	// 目录已存在，无需创建，返回nil表示成功
-	return nil
 }

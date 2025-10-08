@@ -1,7 +1,6 @@
 package zlog
 
 import (
-	"strconv"
 	"testing"
 	"time"
 )
@@ -40,21 +39,26 @@ func Test_clearLog(t *testing.T) {
 
 // 动态level 测试
 func TestNewAtomicLevelAt(t *testing.T) {
-	i := 1
 
 	//SetEnv(LOG_PRO)
 	//SetLog(ENV_DEBUG)
-	for {
-		F().Debugf("%s", "测试下好不好"+strconv.Itoa(i))
-		if i >= 200 {
-			//atomicLevel.SetLevel(zapcore.DebugLevel)
-			SetDebugLevel()
-		}
-		if i >= 1000 {
-			break
-		}
+	SetLog(ENV_WARN)
+	SetLog(ENV_DEBUG)
+	F().Warn("test_warn")
+	F().Info("test_info")
+	F().Debug("test_debug")
+	F().Error("test_error")
 
-		i++
-	}
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
+}
+
+func TestMangets(t *testing.T) {
+	mgr := NewManager()
+	mgr.SetLog(
+		ENV_WARN,
+		WithRotationTime(12),
+	)
+
+	svcLog := mgr.F("payment")
+	svcLog.Warn("order pending")
 }
