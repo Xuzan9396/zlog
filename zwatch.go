@@ -73,7 +73,8 @@ func WatchErr() (chan string, error) {
 				}
 				// 检查是否是新增文件 || event.Op&fsnotify.Remove == fsnotify.Remove
 				if event.Op&fsnotify.Create == fsnotify.Create {
-					if filepath.Ext(event.Name) == ".log" && strings.Contains(event.Name, "sign_error20") {
+					cfg := getConfig()
+					if filepath.Ext(event.Name) == ".log" && strings.Contains(event.Name, cfg.ErrorLoggerName+"20") {
 						//fmt.Println("detected file:", event.Name)
 						runtailGo(watchdirFile)
 					}
@@ -101,7 +102,8 @@ func WatchErr() (chan string, error) {
 func runtailGo(dirFile string) error {
 
 	// 先为目录下现有的日志文件启动监听
-	initialFiles, err := filepath.Glob(filepath.Join(dirFile, "sign_error20*.log"))
+	cfg := getConfig()
+	initialFiles, err := filepath.Glob(filepath.Join(dirFile, fmt.Sprintf("%s20*.log", cfg.ErrorLoggerName)))
 	if err != nil {
 		return err
 	}

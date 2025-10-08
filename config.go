@@ -1,6 +1,11 @@
 package zlog
 
-import "go.uber.org/zap/zapcore"
+import (
+	"os"
+	"strings"
+
+	"go.uber.org/zap/zapcore"
+)
 
 // Env 表示日志运行的环境或预设等级。
 type Env string
@@ -33,16 +38,23 @@ const (
 
 // Config 聚合日志系统运行所需的全部配置。
 type Config struct {
-	WithMaxAge       int
-	WithRotationTime int
-	Env              Env
-	Level            zapcore.Level
-	formDate         EnvDate
-	levelOverride    bool
+	WithMaxAge        int
+	WithRotationTime  int
+	Env               Env
+	Level             zapcore.Level
+	formDate          EnvDate
+	levelOverride     bool
+	DefaultLoggerName string
+	ErrorLoggerName   string
 }
 
 // LogOption 通过函数式选项修改配置。
 type LogOption func(*Config)
+
+const (
+	defaultPrefixEnv = "ZLOG_FILE_PREFIX"
+	defaultBaseName  = "log"
+)
 
 var envLevelMap = map[Env]zapcore.Level{
 	ENV_PRO:    zapcore.InfoLevel,
@@ -57,12 +69,20 @@ var envLevelMap = map[Env]zapcore.Level{
 
 // newDefaultConfig 返回默认配置。
 func newDefaultConfig() Config {
+	prefix := strings.TrimSpace(os.Getenv(defaultPrefixEnv))
+	if prefix == "" {
+		prefix = defaultBaseName
+	}
+	errorName := prefix + "_error"
+
 	return Config{
-		WithMaxAge:       10 * 24,
-		WithRotationTime: 24,
-		Env:              ENV_PRO,
-		Level:            resolveLevel(ENV_PRO),
-		formDate:         DATE_SEC,
+		WithMaxAge:        10 * 24,
+		WithRotationTime:  24,
+		Env:               ENV_PRO,
+		Level:             resolveLevel(ENV_PRO),
+		DefaultLoggerName: prefix,
+		ErrorLoggerName:   errorName,
+		formDate:          DATE_SEC,
 	}
 }
 
@@ -100,6 +120,33 @@ func WithLevel(level zapcore.Level) LogOption {
 	}
 }
 
+// WithDefaultName 修改默认日志前缀（例如 sign -> log），自动派生错误日志前缀。
+func WithDefaultName(name string) LogOption {
+	return func(cfg *Config) {
+		name = normalizeName(name)
+		if name != "" {
+			cfg.DefaultLoggerName = name
+			if cfg.ErrorLoggerName == "" || strings.HasPrefix(cfg.ErrorLoggerName, cfg.DefaultLoggerName) {
+				cfg.ErrorLoggerName = name + "_error"
+			}
+		}
+	}
+}
+
+// WithErrorName 指定错误日志聚合前缀。
+func WithErrorName(name string) LogOption {
+	return func(cfg *Config) {
+		name = normalizeName(name)
+		if name != "" {
+			cfg.ErrorLoggerName = name
+		}
+	}
+}
+
+func normalizeName(name string) string {
+	return strings.TrimSpace(name)
+}
+
 // applyOptions 应用可选参数，并在未覆盖等级时同步环境默认等级。
 func applyOptions(cfg *Config, options ...LogOption) {
 	for _, option := range options {
@@ -107,6 +154,12 @@ func applyOptions(cfg *Config, options ...LogOption) {
 	}
 	if !cfg.levelOverride {
 		cfg.Level = resolveLevel(cfg.Env)
+	}
+	if cfg.DefaultLoggerName == "" {
+		cfg.DefaultLoggerName = defaultBaseName
+	}
+	if cfg.ErrorLoggerName == "" {
+		cfg.ErrorLoggerName = cfg.DefaultLoggerName + "_error"
 	}
 }
 

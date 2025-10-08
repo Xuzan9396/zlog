@@ -93,7 +93,7 @@ func (r *loggerRegistry) buildLogger(name string, skipCaller uint8) *zap.Sugared
 // ensureErrorWriter 构建共享的 error writer，保证只初始化一次。
 func (r *loggerRegistry) ensureErrorWriter(cfg Config) zapcore.WriteSyncer {
 	r.errorOnce.Do(func() {
-		writer, err := newErrorWriter(cfg, logFilePath("sign_error.log"))
+		writer, err := newErrorWriter(cfg, logFilePath("%s.log", cfg.ErrorLoggerName))
 		if err != nil || writer == nil {
 			fmt.Fprintf(os.Stderr, "zlog: failed to create error writer: %v\n", err)
 			r.errorWriter = zapcore.AddSync(os.Stderr)
@@ -102,4 +102,11 @@ func (r *loggerRegistry) ensureErrorWriter(cfg Config) zapcore.WriteSyncer {
 		}
 	})
 	return r.errorWriter
+}
+
+func (r *loggerRegistry) resetErrorWriter() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.errorWriter = nil
+	r.errorOnce = sync.Once{}
 }

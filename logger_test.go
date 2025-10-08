@@ -114,3 +114,19 @@ func TestManagerIsolation(t *testing.T) {
 		t.Fatalf("manager B level changed unexpectedly: %s", lvl)
 	}
 }
+
+func TestWithDefaultNameOption(t *testing.T) {
+	mgr := NewManager(WithDefaultName("log"), WithErrorName("log_err"))
+	cfg := mgr.getConfig()
+	if cfg.DefaultLoggerName != "log" {
+		t.Fatalf("expected default name log, got %s", cfg.DefaultLoggerName)
+	}
+	if cfg.ErrorLoggerName != "log_err" {
+		t.Fatalf("expected error name log_err, got %s", cfg.ErrorLoggerName)
+	}
+
+	logger := mgr.Logger()
+	if logger == nil {
+		t.Fatal("expected logger instance")
+	}
+}

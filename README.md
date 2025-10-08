@@ -80,6 +80,7 @@ _ = mgr.Sync("payment")
 - `SetDebugLevel()`: 运行期间动态调整全局日志等级为 Debug。
 - `SetZapOut(path string)`: 将标准库 `log` 输出到指定的滚动日志文件。
 - `NewManager(options ...LogOption)`: 创建独立实例，API 与全局保持一致（`mgr.F`、`mgr.Sync`、`mgr.SetZapOut` 等）。
+- 环境变量 `ZLOG_FILE_PREFIX`：设置默认日志前缀（默认 `sign`），错误日志会自动追加 `_error`。
 
 ### 等级映射参考
 

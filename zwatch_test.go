@@ -28,6 +28,7 @@ func TestWatchErr(t *testing.T) {
 		if msg == "" {
 			t.Fatal("received empty message")
 		}
+		t.Log(msg)
 	case <-time.After(5 * time.Second):
 		t.Fatal("watch err timeout")
 	}
