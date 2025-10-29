@@ -39,7 +39,6 @@ func NewManager(options ...LogOption) *Manager {
 // SetLog 应用环境和选项到当前管理器。
 func (m *Manager) SetLog(env Env, options ...LogOption) {
 	m.cfgMu.Lock()
-	oldErrName := m.cfg.ErrorLoggerName
 	cfg := m.cfg
 	cfg.Env = env
 	cfg.levelOverride = false
@@ -48,9 +47,8 @@ func (m *Manager) SetLog(env Env, options ...LogOption) {
 	m.cfgMu.Unlock()
 
 	m.level.SetLevel(cfg.Level)
-	if cfg.ErrorLoggerName != oldErrName {
-		m.registry.resetErrorWriter()
-	}
+	// 清除 logger 缓存，强制重新创建以应用新的输出配置
+	m.registry.reset()
 }
 
 // UpdateRetention 更新日志保留及切割周期。
@@ -73,6 +71,8 @@ func (m *Manager) SetLevel(level zapcore.Level) {
 	m.cfgMu.Unlock()
 
 	m.level.SetLevel(level)
+	// 清除 logger 缓存，强制重新创建以应用新的输出配置
+	m.registry.reset()
 }
 
 // Logger 返回指定名称的 SugaredLogger。

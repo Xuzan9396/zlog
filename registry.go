@@ -110,3 +110,12 @@ func (r *loggerRegistry) resetErrorWriter() {
 	r.errorWriter = nil
 	r.errorOnce = sync.Once{}
 }
+
+// reset 清空所有缓存的 logger，强制下次获取时重新创建。
+func (r *loggerRegistry) reset() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.loggers = make(map[string]*zap.SugaredLogger)
+	r.errorWriter = nil
+	r.errorOnce = sync.Once{}
+}

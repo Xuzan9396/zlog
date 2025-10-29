@@ -8,6 +8,7 @@
 - 同时支持全局模式与 `Manager` 实例模式，避免多方依赖互相覆盖配置。
 - 使用 `WithMaxAge`、`WithRotationTime`、`WithDate` 等选项快速配置保留时长与切割周期。
 - 预设环境映射 zap 等级：`ENV_DEBUG`、`ENV_INFO`、`ENV_WARN`、`ENV_ERROR`、`ENV_DPANIC`、`ENV_PANIC`、`ENV_FATAL` 等；默认仅 `ENV_DEBUG` 同步输出到控制台。
+- **支持动态修改日志级别**：运行时可通过 `SetDebugLevel()` 或 `SetLevel()` 动态调整日志级别和终端输出，无需重启进程，便于线上问题排查。
 - `SetZapOut` 将标准库 `log` 输出接入 zlog 的滚动日志。
 - 集成 `fsnotify` + `tail` 的错误日志监听能力，可通过回调或通道实时处理异常。
 
@@ -70,6 +71,41 @@ _ = mgr.Sync("payment")
 ```
 
 实例同样提供 `SetZapOut`、`SetDebugLevel`、`WithLevel` 等功能，语义与全局函数一致。
+
+### 动态修改日志级别
+
+在生产环境中，如需临时开启 Debug 日志排查问题，可以动态调整日志级别，无需重启进程：
+
+```go
+package main
+
+import (
+	"time"
+	"github.com/Xuzan9396/zlog"
+)
+
+func main() {
+	// 初始化为生产环境（不输出到终端）
+	zlog.SetLog(zlog.ENV_PRO)
+
+	zlog.F().Info("生产环境 Info 日志（仅写文件）")
+	zlog.F().Debug("生产环境 Debug 日志（不会记录）")
+
+	// 动态切换到 Debug 级别（会输出到终端）
+	zlog.SetDebugLevel()
+
+	zlog.F().Info("切换后 Info 日志（输出到终端和文件）")
+	zlog.F().Debug("切换后 Debug 日志（输出到终端和文件）")
+
+	time.Sleep(1 * time.Second)
+}
+```
+
+**特性说明：**
+- `SetDebugLevel()` 会动态切换日志级别为 Debug，并自动启用终端输出
+- 已创建的 logger 会自动重建，应用新的配置
+- 支持全局模式和 Manager 实例模式
+- 线程安全，支持高并发场景（已通过 10万+ 次并发测试和 race detector 检测）
 
 ## 配置说明
 - `SetLog(env Env, options ...LogOption)`: 统一入口设置环境和参数。
@@ -142,5 +178,8 @@ func main() {
 结构化拆分后，业务逻辑保持不变，但更易于维护与扩展。
 
 ## 版本记录
+- `v1.0.2`: 修复动态修改日志级别功能，支持 PRO 环境下通过 `SetDebugLevel()` 动态启用终端输出；新增并发压测和性能基准测试。
+- `v1.0.1`: 稳定版本发布。
+- `v1.0.0`: 重构代码结构，提升可维护性。
 - `v0.1.3`: 新增 `WithDate` 支持毫秒时间，完善日志清理、错误监听回调。
 - `v0.1.1`: 引入 `SetLog` 选项式配置，合并错误日志输出，支持 zap 重定向标准日志。

@@ -20,7 +20,8 @@ func newInfoWriter(cfg Config, fileName string) (zapcore.WriteSyncer, error) {
 		rotatelogs.WithMaxAge(time.Duration(cfg.WithMaxAge)*time.Hour),
 		rotatelogs.WithRotationTime(time.Duration(cfg.WithRotationTime)*time.Hour),
 	)
-	if cfg.Env == ENV_DEBUG {
+	// 支持通过 Env 或 Level 来控制终端输出
+	if cfg.Env == ENV_DEBUG || cfg.Level == zapcore.DebugLevel {
 		return zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(fileWriter)), err
 	}
 	return zapcore.AddSync(fileWriter), err
@@ -48,7 +49,8 @@ func (m *Manager) SetZapOut(fileName string) error {
 		rotatelogs.WithRotationSize(1024*1024*10),
 	)
 	var w zapcore.WriteSyncer
-	if cfg.Env == ENV_DEBUG {
+	// 支持通过 Env 或 Level 来控制终端输出
+	if cfg.Env == ENV_DEBUG || cfg.Level == zapcore.DebugLevel {
 		w, err = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(fileWriter)), err
 		if err != nil {
 			return err
