@@ -17,3 +17,33 @@ func Sync(fileName string) error {
 func SetDebugLevel() {
 	defaultManager.SetDebugLevel()
 }
+
+// SetInfoLevel 将全局等级动态调整为 Info。
+func SetInfoLevel() {
+	defaultManager.SetInfoLevel()
+}
+
+// SetWarnLevel 将全局等级动态调整为 Warn。
+func SetWarnLevel() {
+	defaultManager.SetWarnLevel()
+}
+
+// SetErrorLevel 将全局等级动态调整为 Error。
+func SetErrorLevel() {
+	defaultManager.SetErrorLevel()
+}
+
+// SetDPanicLevel 将全局等级动态调整为 DPanic。
+func SetDPanicLevel() {
+	defaultManager.SetDPanicLevel()
+}
+
+// SetPanicLevel 将全局等级动态调整为 Panic。
+func SetPanicLevel() {
+	defaultManager.SetPanicLevel()
+}
+
+// SetFatalLevel 将全局等级动态调整为 Fatal。
+func SetFatalLevel() {
+	defaultManager.SetFatalLevel()
+}

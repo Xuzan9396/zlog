@@ -125,6 +125,66 @@ func TestManagerDynamicDebugLevel(t *testing.T) {
 	t.Log("=== 测试完成 ===")
 }
 
+// 测试所有日志级别的快捷设置方法
+func TestAllLevelSetters(t *testing.T) {
+	t.Log("=== 测试所有日志级别快捷方法 ===")
+
+	// 测试全局方法
+	t.Log("测试全局方法:")
+
+	SetDebugLevel()
+	t.Log("- SetDebugLevel() 完成")
+	F().Debug("Debug 级别日志")
+	F().Info("Info 级别日志")
+
+	SetInfoLevel()
+	t.Log("- SetInfoLevel() 完成")
+	F().Info("Info 级别日志")
+
+	SetWarnLevel()
+	t.Log("- SetWarnLevel() 完成")
+	F().Warn("Warn 级别日志")
+
+	SetErrorLevel()
+	t.Log("- SetErrorLevel() 完成")
+	F().Error("Error 级别日志")
+
+	// DPanic, Panic, Fatal 在测试中不实际调用，以免影响测试进程
+	SetDPanicLevel()
+	t.Log("- SetDPanicLevel() 完成")
+
+	// 测试 Manager 实例方法
+	t.Log("\n测试 Manager 实例方法:")
+	mgr := NewManager()
+
+	mgr.SetDebugLevel()
+	t.Log("- Manager.SetDebugLevel() 完成")
+	mgr.F("test").Debug("Manager Debug 日志")
+
+	mgr.SetInfoLevel()
+	t.Log("- Manager.SetInfoLevel() 完成")
+	mgr.F("test").Info("Manager Info 日志")
+
+	mgr.SetWarnLevel()
+	t.Log("- Manager.SetWarnLevel() 完成")
+	mgr.F("test").Warn("Manager Warn 日志")
+
+	mgr.SetErrorLevel()
+	t.Log("- Manager.SetErrorLevel() 完成")
+	mgr.F("test").Error("Manager Error 日志")
+
+	mgr.SetDPanicLevel()
+	t.Log("- Manager.SetDPanicLevel() 完成")
+
+	mgr.SetPanicLevel()
+	t.Log("- Manager.SetPanicLevel() 完成")
+
+	mgr.SetFatalLevel()
+	t.Log("- Manager.SetFatalLevel() 完成")
+
+	t.Log("=== 所有级别设置方法测试通过 ===")
+}
+
 // 并发压测：测试在高并发场景下动态切换日志级别
 func TestConcurrentDynamicLevel(t *testing.T) {
 	t.Log("=== 开始并发压测 ===")

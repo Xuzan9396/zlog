@@ -117,6 +117,36 @@ func (m *Manager) SetDebugLevel() {
 	m.SetLevel(zapcore.DebugLevel)
 }
 
+// SetInfoLevel 将等级调整为 Info。
+func (m *Manager) SetInfoLevel() {
+	m.SetLevel(zapcore.InfoLevel)
+}
+
+// SetWarnLevel 将等级调整为 Warn。
+func (m *Manager) SetWarnLevel() {
+	m.SetLevel(zapcore.WarnLevel)
+}
+
+// SetErrorLevel 将等级调整为 Error。
+func (m *Manager) SetErrorLevel() {
+	m.SetLevel(zapcore.ErrorLevel)
+}
+
+// SetDPanicLevel 将等级调整为 DPanic。
+func (m *Manager) SetDPanicLevel() {
+	m.SetLevel(zapcore.DPanicLevel)
+}
+
+// SetPanicLevel 将等级调整为 Panic。
+func (m *Manager) SetPanicLevel() {
+	m.SetLevel(zapcore.PanicLevel)
+}
+
+// SetFatalLevel 将等级调整为 Fatal。
+func (m *Manager) SetFatalLevel() {
+	m.SetLevel(zapcore.FatalLevel)
+}
+
 // getConfig 返回配置副本，供内部使用。
 func (m *Manager) getConfig() Config {
 	m.cfgMu.RLock()

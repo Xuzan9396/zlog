@@ -103,6 +103,7 @@ func main() {
 
 **特性说明：**
 - `SetDebugLevel()` 会动态切换日志级别为 Debug，并自动启用终端输出
+- 支持所有日志级别的快捷设置方法：`SetDebugLevel()`, `SetInfoLevel()`, `SetWarnLevel()`, `SetErrorLevel()`, `SetDPanicLevel()`, `SetPanicLevel()`, `SetFatalLevel()`
 - 已创建的 logger 会自动重建，应用新的配置
 - 支持全局模式和 Manager 实例模式
 - 线程安全，支持高并发场景（已通过 10万+ 次并发测试和 race detector 检测）
@@ -113,9 +114,16 @@ func main() {
 - `WithRotationTime(hours int)`: 日志切割周期（单位：小时）。
 - `WithDate(format EnvDate)`: 切换秒级（`DATE_SEC`）或毫秒级（`DATE_MSEC`）时间格式。
 - `WithLevel(level zapcore.Level)`: 在保留环境语义的同时强制指定 zap 等级。
-- `SetDebugLevel()`: 运行期间动态调整全局日志等级为 Debug。
+- **动态级别设置方法**：运行期间动态调整日志等级
+  - `SetDebugLevel()`: 调整为 Debug 级别
+  - `SetInfoLevel()`: 调整为 Info 级别
+  - `SetWarnLevel()`: 调整为 Warn 级别
+  - `SetErrorLevel()`: 调整为 Error 级别
+  - `SetDPanicLevel()`: 调整为 DPanic 级别
+  - `SetPanicLevel()`: 调整为 Panic 级别
+  - `SetFatalLevel()`: 调整为 Fatal 级别
 - `SetZapOut(path string)`: 将标准库 `log` 输出到指定的滚动日志文件。
-- `NewManager(options ...LogOption)`: 创建独立实例，API 与全局保持一致（`mgr.F`、`mgr.Sync`、`mgr.SetZapOut` 等）。
+- `NewManager(options ...LogOption)`: 创建独立实例，API 与全局保持一致（`mgr.F`、`mgr.Sync`、`mgr.SetZapOut` 等，所有动态级别设置方法也同样支持）。
 - 环境变量 `ZLOG_FILE_PREFIX`：设置默认日志前缀（默认 `sign`），错误日志会自动追加 `_error`。
 
 ### 等级映射参考
