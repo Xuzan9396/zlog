@@ -186,6 +186,7 @@ func main() {
 结构化拆分后，业务逻辑保持不变，但更易于维护与扩展。
 
 ## 版本记录
+- `v1.0.3`: 添加所有日志级别的快捷设置方法（SetInfoLevel, SetWarnLevel, SetErrorLevel, SetDPanicLevel, SetPanicLevel, SetFatalLevel），完善动态级别切换能力。
 - `v1.0.2`: 修复动态修改日志级别功能，支持 PRO 环境下通过 `SetDebugLevel()` 动态启用终端输出；新增并发压测和性能基准测试。
 - `v1.0.1`: 稳定版本发布。
 - `v1.0.0`: 重构代码结构，提升可维护性。
