@@ -3,6 +3,7 @@ package zlog
 import (
 	"os"
 	"strings"
+	"time"
 
 	"go.uber.org/zap/zapcore"
 )
@@ -46,6 +47,9 @@ type Config struct {
 	levelOverride     bool
 	DefaultLoggerName string
 	ErrorLoggerName   string
+	ConsoleOnly       bool          // 仅输出到终端，不写入文件
+	AutoCleanup       bool          // 是否启用后台自动清理（默认 true）
+	CleanupInterval   time.Duration // 清理间隔（默认 24 小时）
 }
 
 // LogOption 通过函数式选项修改配置。
@@ -83,6 +87,8 @@ func newDefaultConfig() Config {
 		DefaultLoggerName: prefix,
 		ErrorLoggerName:   errorName,
 		formDate:          DATE_SEC,
+		AutoCleanup:       true,             // 默认启用自动清理
+		CleanupInterval:   24 * time.Hour,   // 默认每 24 小时清理一次
 	}
 }
 
@@ -140,6 +146,27 @@ func WithErrorName(name string) LogOption {
 		if name != "" {
 			cfg.ErrorLoggerName = name
 		}
+	}
+}
+
+// WithConsoleOnly 设置为仅输出到终端模式，不写入文件。
+func WithConsoleOnly(consoleOnly bool) LogOption {
+	return func(cfg *Config) {
+		cfg.ConsoleOnly = consoleOnly
+	}
+}
+
+// WithAutoCleanup 设置是否启用后台自动清理。
+func WithAutoCleanup(enable bool) LogOption {
+	return func(cfg *Config) {
+		cfg.AutoCleanup = enable
+	}
+}
+
+// WithCleanupInterval 设置后台清理间隔。
+func WithCleanupInterval(interval time.Duration) LogOption {
+	return func(cfg *Config) {
+		cfg.CleanupInterval = interval
 	}
 }
 

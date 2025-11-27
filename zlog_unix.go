@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// newInfoWriter 创建 info 日志的滚动写入器，支持控制台双写。
+// newInfoWriter 创建 info 日志的滚动写入器（仅文件，不包含终端输出）
 func newInfoWriter(cfg Config, fileName string) (zapcore.WriteSyncer, error) {
 	fileWriter, err := rotatelogs.New(
 		strings.Replace(fileName, ".log", "", -1)+"%Y-%m-%d.log",
@@ -21,10 +21,7 @@ func newInfoWriter(cfg Config, fileName string) (zapcore.WriteSyncer, error) {
 		rotatelogs.WithMaxAge(time.Duration(cfg.WithMaxAge)*time.Hour),
 		rotatelogs.WithRotationTime(time.Duration(cfg.WithRotationTime)*time.Hour),
 	)
-	// 支持通过 Env 或 Level 来控制终端输出
-	if cfg.Env == ENV_DEBUG || cfg.Level == zapcore.DebugLevel {
-		return zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(fileWriter)), err
-	}
+	// 只返回文件 writer，终端输出由 buildLogger 中的独立 core 处理
 	return zapcore.AddSync(fileWriter), err
 }
 

@@ -14,12 +14,12 @@ var (
 	logsDir  = defaultLogsDir()
 )
 
-// init 负责创建日志目录并立即进行一次历史清理。
+// init 负责创建日志目录。
+// 注意：不在此进行清理，清理由后台任务定期执行。
 func init() {
 	if err := ensureDir(logsDir); err != nil {
 		fmt.Fprintf(os.Stderr, "zlog: ensure log dir failed: %v\n", err)
 	}
-	clearLog()
 }
 
 // logDir 返回当前使用的日志根目录。
@@ -37,11 +37,20 @@ func loadLocation() *time.Location {
 }
 
 // defaultLogsDir 根据系统选择默认日志目录。
+// 使用程序启动时的工作目录（运行目录）作为根目录。
 func defaultLogsDir() string {
-	if runtime.GOOS == "windows" {
-		return ".\\logs"
+	// 获取当前工作目录（程序运行目录）
+	cwd, err := os.Getwd()
+	if err != nil {
+		// 如果获取失败，使用相对路径作为兜底
+		if runtime.GOOS == "windows" {
+			return ".\\logs"
+		}
+		return "./logs"
 	}
-	return "./logs"
+
+	// 返回工作目录下的 logs 子目录（绝对路径）
+	return filepath.Join(cwd, "logs")
 }
 
 // ensureDir 确保目录存在且为文件夹。

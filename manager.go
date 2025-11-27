@@ -4,6 +4,7 @@ import (
 	"errors"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -11,16 +12,24 @@ import (
 
 // Manager 提供独立的日志实例，避免全局配置相互覆盖。
 type Manager struct {
-	cfgMu    sync.RWMutex
-	cfg      Config
-	level    zap.AtomicLevel
-	registry *loggerRegistry
+	cfgMu       sync.RWMutex
+	cfg         Config
+	level       zap.AtomicLevel
+	registry    *loggerRegistry
+	cleanupTask *CleanupTask
+	cleanupOnce sync.Once
 }
 
-var defaultManager = newDefaultManager()
+var (
+	defaultManager     *Manager
+	defaultManagerOnce sync.Once
+)
 
-func newDefaultManager() *Manager {
-	return NewManager()
+func getDefaultManager() *Manager {
+	defaultManagerOnce.Do(func() {
+		defaultManager = NewManager()
+	})
+	return defaultManager
 }
 
 // NewManager 创建一个新的日志管理器，可选地应用配置选项。
@@ -33,6 +42,15 @@ func NewManager(options ...LogOption) *Manager {
 		level: zap.NewAtomicLevelAt(cfg.Level),
 	}
 	mgr.registry = newLoggerRegistry(&mgr.level, mgr.getConfig)
+
+	// 延迟启动清理任务，避免初始化循环依赖
+	if cfg.AutoCleanup {
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			mgr.startCleanupTask()
+		}()
+	}
+
 	return mgr
 }
 
@@ -49,6 +67,9 @@ func (m *Manager) SetLog(env Env, options ...LogOption) {
 	m.level.SetLevel(cfg.Level)
 	// 清除 logger 缓存，强制重新创建以应用新的输出配置
 	m.registry.reset()
+
+	// 重新启动清理任务（如果配置改变）
+	m.startCleanupTask()
 }
 
 // UpdateRetention 更新日志保留及切割周期。
@@ -147,6 +168,66 @@ func (m *Manager) SetFatalLevel() {
 	m.SetLevel(zapcore.FatalLevel)
 }
 
+// SetConsoleOnly 动态设置仅输出到终端模式。
+func (m *Manager) SetConsoleOnly(consoleOnly bool) {
+	m.cfgMu.Lock()
+	cfg := m.cfg
+	cfg.ConsoleOnly = consoleOnly
+	m.cfg = cfg
+	m.cfgMu.Unlock()
+
+	// 清除 logger 缓存，强制重新创建以应用新的输出配置
+	m.registry.reset()
+}
+
+// startCleanupTask 启动后台清理任务
+func (m *Manager) startCleanupTask() {
+	cfg := m.getConfig()
+
+	// 如果禁用自动清理，停止现有任务
+	if !cfg.AutoCleanup {
+		m.StopCleanupTask()
+		return
+	}
+
+	// 只初始化一次
+	m.cleanupOnce.Do(func() {
+		m.cleanupTask = newCleanupTask(cfg.CleanupInterval)
+		m.cleanupTask.Start()
+	})
+
+	// 如果已经存在任务，检查是否需要更新
+	if m.cleanupTask != nil {
+		// 如果间隔改变，重启任务
+		if m.cleanupTask.interval != cfg.CleanupInterval {
+			m.StopCleanupTask()
+			m.cleanupOnce = sync.Once{} // 重置 Once
+			m.cleanupTask = newCleanupTask(cfg.CleanupInterval)
+			m.cleanupTask.Start()
+		}
+	}
+}
+
+// CleanupLogs 手动触发一次日志清理
+func (m *Manager) CleanupLogs() {
+	clearLog()
+}
+
+// StopCleanupTask 停止后台清理任务
+func (m *Manager) StopCleanupTask() {
+	if m.cleanupTask != nil {
+		m.cleanupTask.Stop()
+	}
+}
+
+// IsCleanupRunning 返回清理任务是否正在运行
+func (m *Manager) IsCleanupRunning() bool {
+	if m.cleanupTask == nil {
+		return false
+	}
+	return m.cleanupTask.IsRunning()
+}
+
 // getConfig 返回配置副本，供内部使用。
 func (m *Manager) getConfig() Config {
 	m.cfgMu.RLock()
@@ -158,25 +239,40 @@ func (m *Manager) getConfig() Config {
 
 // SetLog 是兼容旧行为的全局入口。
 func SetLog(env Env, options ...LogOption) {
-	defaultManager.SetLog(env, options...)
+	getDefaultManager().SetLog(env, options...)
 }
 
 // SetEnv 兼容旧行为，等价于 SetLog。
 func SetEnv(env string) {
-	defaultManager.SetLog(Env(env))
+	getDefaultManager().SetLog(Env(env))
 }
 
 // SetConfig 兼容旧行为，仅调整保留和切割周期。
 func SetConfig(withMaxAge, withRotationTime int) {
-	defaultManager.UpdateRetention(withMaxAge, withRotationTime)
+	getDefaultManager().UpdateRetention(withMaxAge, withRotationTime)
 }
 
 // getConfig 返回默认管理器的配置副本。
 func getConfig() Config {
-	return defaultManager.getConfig()
+	return getDefaultManager().getConfig()
 }
 
 // SetZapOut 兼容旧行为，将标准库 log 输出重定向到默认管理器。
 func SetZapOut(fileName string) error {
-	return defaultManager.SetZapOut(fileName)
+	return getDefaultManager().SetZapOut(fileName)
+}
+
+// CleanupLogs 手动触发全局日志清理。
+func CleanupLogs() {
+	getDefaultManager().CleanupLogs()
+}
+
+// StopCleanupTask 停止全局后台清理任务。
+func StopCleanupTask() {
+	getDefaultManager().StopCleanupTask()
+}
+
+// IsCleanupRunning 返回全局清理任务是否正在运行。
+func IsCleanupRunning() bool {
+	return getDefaultManager().IsCleanupRunning()
 }

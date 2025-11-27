@@ -59,11 +59,11 @@ func (r *loggerRegistry) getOrCreate(name string, skipCaller uint8) *zap.Sugared
 func (r *loggerRegistry) buildLogger(name string, skipCaller uint8) *zap.SugaredLogger {
 	cfg := r.cfgFn()
 
-	encoder := zapcore.NewJSONEncoder(zapcore.EncoderConfig{
+	// 基础 encoder 配置
+	baseEncoderConfig := zapcore.EncoderConfig{
 		MessageKey:     "message",
 		LevelKey:       "level",
 		TimeKey:        "time",
-		NameKey:        "logger",
 		CallerKey:      "line",
 		StacktraceKey:  "stacktrace",
 		LineEnding:     zapcore.DefaultLineEnding,
@@ -71,23 +71,59 @@ func (r *loggerRegistry) buildLogger(name string, skipCaller uint8) *zap.Sugared
 		EncodeTime:     newTimeEncoder(r.cfgFn),
 		EncodeDuration: zapcore.SecondsDurationEncoder,
 		EncodeCaller:   zapcore.ShortCallerEncoder,
-	})
+	}
 
-	infoWriter, _ := newInfoWriter(cfg, logFilePath("%s_info.log", name))
+	// 文件 encoder：不带 f 字段
+	fileEncoderConfig := baseEncoderConfig
+	fileEncoder := zapcore.NewJSONEncoder(fileEncoderConfig)
 
-	errorWriter := r.ensureErrorWriter(cfg)
+	// 终端 encoder：固定带 f 字段
+	consoleEncoderConfig := baseEncoderConfig
+	consoleEncoderConfig.NameKey = "f"
+	consoleEncoder := zapcore.NewJSONEncoder(consoleEncoderConfig)
 
-	core := zapcore.NewTee(
-		zapcore.NewCore(encoder, zapcore.AddSync(infoWriter), r.level),
-		zapcore.NewCore(encoder, zapcore.AddSync(errorWriter), zapcore.ErrorLevel),
-	)
+	// 确定 logger 名称用于终端输出
+	loggerName := name
+	if name == cfg.DefaultLoggerName {
+		loggerName = "log" // 默认 logger 显示为 "log"
+	}
+
+	var core zapcore.Core
+
+	// 如果设置了仅输出到终端模式
+	if cfg.ConsoleOnly {
+		// 只输出到 stdout，使用带 f 字段的 encoder
+		core = zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), r.level)
+	} else {
+		// 默认模式：写文件 + 可能的终端输出
+		infoWriter, _ := newInfoWriter(cfg, logFilePath("%s_info.log", name))
+		errorWriter := r.ensureErrorWriter(cfg)
+
+		// 文件输出使用不带 f 的 encoder
+		fileCores := []zapcore.Core{
+			zapcore.NewCore(fileEncoder, zapcore.AddSync(infoWriter), r.level),
+			zapcore.NewCore(fileEncoder, zapcore.AddSync(errorWriter), zapcore.ErrorLevel),
+		}
+
+		// 如果是 Debug 模式，同时输出到终端（使用带 f 的 encoder）
+		if cfg.Env == ENV_DEBUG || cfg.Level == zapcore.DebugLevel {
+			fileCores = append(fileCores,
+				zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), r.level),
+			)
+		}
+
+		core = zapcore.NewTee(fileCores...)
+	}
 
 	caller := []zap.Option{zap.AddCaller()}
 	if skipCaller > 0 {
 		caller = append(caller, zap.AddCallerSkip(int(skipCaller)))
 	}
 
-	return zap.New(core, caller...).Sugar()
+	// 添加 logger name 用于终端输出的 f 字段
+	logger := zap.New(core, caller...).Named(loggerName)
+
+	return logger.Sugar()
 }
 
 // ensureErrorWriter 构建共享的 error writer，保证只初始化一次。
