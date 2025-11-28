@@ -6,6 +6,7 @@ package zlog
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,6 +16,11 @@ import (
 
 // newInfoWriter 创建 info 日志的滚动写入器（仅文件，不包含终端输出）
 func newInfoWriter(cfg Config, fileName string) (zapcore.WriteSyncer, error) {
+	// 确保日志文件的父目录存在
+	if err := ensureDir(filepath.Dir(fileName)); err != nil {
+		return nil, err
+	}
+
 	fileWriter, err := rotatelogs.New(
 		strings.Replace(fileName, ".log", "", -1)+"%Y-%m-%d.log",
 		rotatelogs.WithLinkName(fileName),
@@ -27,6 +33,11 @@ func newInfoWriter(cfg Config, fileName string) (zapcore.WriteSyncer, error) {
 
 // newErrorWriter 创建 error 日志专用的滚动写入器。
 func newErrorWriter(cfg Config, fileName string) (zapcore.WriteSyncer, error) {
+	// 确保日志文件的父目录存在
+	if err := ensureDir(filepath.Dir(fileName)); err != nil {
+		return nil, err
+	}
+
 	fileWriter, err := rotatelogs.New(
 		strings.Replace(fileName, ".log", "", -1)+"%Y-%m-%d.log",
 		rotatelogs.WithLinkName(fileName),
@@ -41,6 +52,11 @@ func (m *Manager) SetZapOut(fileName string) error {
 	cfg := m.getConfig()
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	// 确保日志文件的父目录存在
+	if err := ensureDir(filepath.Dir(fileName)); err != nil {
+		return err
+	}
 
 	fileWriter, err := rotatelogs.New(
 		strings.Replace(fileName, ".log", "", -1)+"%Y-%m-%d.log",

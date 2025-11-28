@@ -14,12 +14,10 @@ var (
 	logsDir  = defaultLogsDir()
 )
 
-// init 负责创建日志目录。
-// 注意：不在此进行清理，清理由后台任务定期执行。
+// init 不再提前创建日志目录，而是在实际需要写入文件时才创建。
+// 注意：清理由后台任务定期执行。
 func init() {
-	if err := ensureDir(logsDir); err != nil {
-		fmt.Fprintf(os.Stderr, "zlog: ensure log dir failed: %v\n", err)
-	}
+	// 不再提前创建目录，延迟到实际需要写入文件时
 }
 
 // logDir 返回当前使用的日志根目录。
