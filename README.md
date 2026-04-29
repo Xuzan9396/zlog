@@ -7,7 +7,7 @@
 - 通过 `F("service")` 按需创建业务日志，同时自动写入共享的错误日志。
 - 同时支持全局模式与 `Manager` 实例模式，避免多方依赖互相覆盖配置。
 - 使用 `WithMaxAge`、`WithRotationTime`、`WithDate` 等选项快速配置保留时长与切割周期。
-- 预设环境映射 zap 等级：`ENV_DEBUG`、`ENV_INFO`、`ENV_WARN`、`ENV_ERROR`、`ENV_DPANIC`、`ENV_PANIC`、`ENV_FATAL` 等；默认仅 `ENV_DEBUG` 同步输出到控制台。
+- 预设环境映射 zap 等级：`ENV_DEBUG`、`ENV_INFO`、`ENV_WARN`、`ENV_ERROR`、`ENV_DPANIC`、`ENV_PANIC`、`ENV_FATAL` 等；当 `Env=ENV_DEBUG` 或 `Level=DebugLevel` 时会同步输出到控制台，其他等级仅写文件，除非通过 `SetConsoleOnly(true)` 显式开启终端输出。
 - **支持动态修改日志级别**：运行时可通过 `SetDebugLevel()` 或 `SetLevel()` 动态调整日志级别和终端输出，无需重启进程，便于线上问题排查。
 - **支持仅终端输出模式**：通过 `SetConsoleOnly(true)` 或 `WithConsoleOnly(true)` 可动态切换为仅输出到终端，不写入文件，适合开发调试场景。
 - **智能 f 字段**：
@@ -78,6 +78,48 @@ _ = mgr.Sync("payment")
 
 实例同样提供 `SetZapOut`、`SetDebugLevel`、`WithLevel` 等功能，语义与全局函数一致。
 
+### 顶层快捷函数
+
+`zap.go` 提供了一组无需先调 `F()` 即可直接打日志的顶层函数，**内部固定使用名为 `zlog` 的通道**（即 `F("zlog", "")`），所以日志会落在 `logs/zlog_info.log`（错误级别还会汇入共享的 error 文件），与默认 logger（前缀来自 `ZLOG_FILE_PREFIX` 或 `log`）**不是同一个文件**。
+
+```go
+package main
+
+import (
+	"github.com/Xuzan9396/zlog"
+)
+
+func main() {
+	zlog.SetLog(zlog.ENV_DEBUG)
+
+	zlog.Info("server started")             // -> logs/zlog_info.log
+	zlog.Errorf("query failed: %v", "EOF") // -> logs/zlog_info.log + 共享 error 文件
+	zlog.Debug("debug payload")
+	zlog.Infof("user=%s action=%s", "u1", "login")
+
+	// 完整列表: Info/Error/Debug/Warn/Panic/Fatal 与 Infof/Warnf/Errorf/Panicf/Fatalf
+}
+```
+
+> 提示：`zap.go` 中 `Warn`/`Warnf` 当前实现存在内部调用偏差（`Warn` 内部调用了 `.Debug()`），如需精确控制告警级别，建议使用 `zlog.F("xxx").Warn(...)` 或全局 `zlog.SetWarnLevel()` 后再写日志。
+
+### 自定义调用栈深度
+
+`F(name string, opt ...string)` 第二个参数若**非空**，会让底层 zap 多跳一层 `AddCallerSkip(1)`（参见 `zlog.go:7-9` 与 `manager.go:107-110`）。当业务在 zlog 之上又封装了一层 wrapper 时，用这个开关可以让日志的 `line` 字段指向**真实业务代码**，而不是 wrapper 内部。
+
+```go
+package log
+
+import "github.com/Xuzan9396/zlog"
+
+// 业务自己的薄封装层，希望调用方代码出现在 line 字段
+func Info(msg string) {
+	zlog.F("biz", "skip").Info(msg) // 第二参数非空 -> 调用栈再跳一层
+}
+```
+
+不需要调整时直接 `zlog.F("biz")` 即可，第二参数省略不会引入额外开销。
+
 ### 动态修改日志级别
 
 在生产环境中，如需临时开启 Debug 日志排查问题，可以动态调整日志级别，无需重启进程：
@@ -110,6 +152,7 @@ func main() {
 **特性说明：**
 - `SetDebugLevel()` 会动态切换日志级别为 Debug，并自动启用终端输出
 - 支持所有日志级别的快捷设置方法：`SetDebugLevel()`, `SetInfoLevel()`, `SetWarnLevel()`, `SetErrorLevel()`, `SetDPanicLevel()`, `SetPanicLevel()`, `SetFatalLevel()`
+- 若需要任意 `zapcore.Level` 值，全局可使用 `zlog.SetLog(env, zlog.WithLevel(level))` 一次性设定；持有 `*Manager` 实例时则用 `mgr.SetLevel(level)`。`SetLevel` 与 `WithLevel` 都会标记 `levelOverride`，避免后续 `SetLog` 用环境默认等级覆盖（参见 `manager.go:86-97` 与 `config.go:121-127`）
 - 已创建的 logger 会自动重建，应用新的配置
 - 支持全局模式和 Manager 实例模式
 - 线程安全，支持高并发场景（已通过 10万+ 次并发测试和 race detector 检测）
@@ -214,6 +257,10 @@ func main() {
 - `WithConsoleOnly(bool)`: 设置为仅终端输出模式（true）或文件模式（false）。
 - `WithAutoCleanup(bool)`: 是否启用后台自动清理，默认 `true`。
 - `WithCleanupInterval(duration)`: 后台清理间隔，默认 `24 * time.Hour`。
+- `WithDefaultName(name string)`: 修改默认 logger 前缀（业务日志写入 `logs/<name>_info.log`），未单独设置错误前缀时会自动派生 `<name>_error` 作为错误日志前缀（参见 `config.go:130-140`）。
+- `WithErrorName(name string)`: 单独指定错误日志聚合前缀，覆盖 `WithDefaultName` 的派生规则；所有 logger 的 error 级别都会汇聚到此前缀对应的文件（参见 `config.go:143-150`）。
+
+> **默认 logger 前缀解析顺序**：`WithDefaultName` > 环境变量 `ZLOG_FILE_PREFIX` > `"log"`。错误日志前缀默认为 `<defaultName>_error`，可通过 `WithErrorName` 覆盖。
 
 ### 动态调整方法
 - **级别调整**：
@@ -224,6 +271,7 @@ func main() {
   - `SetDPanicLevel()`: 调整为 DPanic 级别
   - `SetPanicLevel()`: 调整为 Panic 级别
   - `SetFatalLevel()`: 调整为 Fatal 级别
+  - `Manager.SetLevel(level zapcore.Level)`: 实例方法，设置任意 zap 等级（如 `mgr.SetLevel(zapcore.WarnLevel)`），全局未提供同名快捷函数，可通过 `SetLog(env, WithLevel(level))` 达到同等效果
 - **输出模式**：
   - `SetConsoleOnly(bool)`: 动态切换仅终端输出模式
 - **清理控制**：
@@ -232,8 +280,12 @@ func main() {
   - `IsCleanupRunning()`: 查询清理任务状态
 
 ### 其他 API
-- `SetZapOut(path string)`: 将标准库 `log` 输出到指定的滚动日志文件。
+- `SetZapOut(path string)`: 将标准库 `log` 输出到滚动日志文件。**注意**：此入口与主日志切割策略不同，按 `WithRotationCount(7) + WithRotationSize(10MB)` 切割（即最多保留 7 个文件，单文件超 10MB 触发滚动），并非按 `WithRotationTime` 时间切割（参见 `zlog_unix.go:64-65`）。
 - `NewManager(options ...LogOption)`: 创建独立实例，API 与全局保持一致（支持所有上述方法）。
+- `SetEnv(env string)`: 兼容旧入口，等价于 `SetLog(Env(env))`，仅切换环境（参见 `manager.go:246-248`）。
+- `SetConfig(maxAge, rotationTime int)`: 兼容旧入口，仅调整日志保留与切割周期，不重置环境（参见 `manager.go:251-253`）。
+- `Manager.UpdateRetention(maxAge, rotationTime int)`: 上面 `SetConfig` 的实例版（参见 `manager.go:76-83`）。
+- `Manager.SetLevel(level zapcore.Level)`: 实例直接设置任意 zap 等级，并标记 `levelOverride`（参见 `manager.go:86-97`）。
 - 环境变量 `ZLOG_FILE_PREFIX`：设置默认日志前缀（默认 `log`），错误日志会自动追加 `_error`。
 
 ### 等级映射参考
@@ -249,6 +301,8 @@ func main() {
 | `ENV_FATAL`  | `FatalLevel`    | 写入日志后 `os.Exit(1)`     |
 
 可通过 `WithLevel` 或 `Manager.SetLevel` 自定义等级。
+
+> **终端输出触发条件**：当 `cfg.Env == ENV_DEBUG` 或 `cfg.Level == zapcore.DebugLevel` 时（参见 `registry.go:109`），日志会在写文件的同时输出到 stdout。`SetDebugLevel()`、`WithLevel(zapcore.DebugLevel)` 都会触发该条件。若想跳过文件直接写终端，请用 `SetConsoleOnly(true)` 或 `WithConsoleOnly(true)`。
 
 ## 错误日志监听
 
@@ -281,7 +335,38 @@ func main() {
 }
 ```
 
-如果更偏好回调方式，可使用 `WatchErrCallback`。
+如果更偏好回调方式，可使用 `WatchErrCallback`，无需自己起 `for range` 协程：
+
+```go
+package main
+
+import (
+	"log"
+	"time"
+
+	"github.com/Xuzan9396/zlog"
+)
+
+func main() {
+	zlog.SetLog(zlog.ENV_INFO)
+
+	err := zlog.WatchErrCallback(func(msg string) {
+		// 此回调由内部 goroutine 触发；切勿在此执行阻塞 I/O，
+		// 否则会拖慢错误日志的实时消费（参见 zwatch.go:28-48）。
+		log.Printf("error tail: %s\n", msg)
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for i := 0; ; i++ {
+		time.Sleep(time.Second)
+		zlog.F().Errorf("simulated failure %d", i)
+	}
+}
+```
+
+> **共享通道注意**：`WatchErr` 和 `WatchErrCallback` 内部共用同一个 `watch chan string`（容量 10）。同一进程内只应注册一份消费者，重复注册会争抢同一通道导致回调丢消息。
 
 ## 项目结构
 - `config.go`: 配置默认值与 Option 定义。
@@ -291,11 +376,35 @@ func main() {
 - `environment.go`: 目录、时区与初始化流程。
 - `zlog_unix.go` / `zlog_window.go`: 不同系统下的滚动写入实现与 `SetZapOut`。
 - `zwatch.go`: 错误日志监听实现。
-- `zap.go`、`syslog.go`: 简化调用的包装函数。
+- `zap.go`: 顶层快捷函数（`Info`/`Error`/`Debug` 等），固定使用 `zlog` 通道写文件。
+- `syslog.go`: `CustomLogger` —— 基于标准库 `log` 的独立 stderr 日志包装器，与 zap 无关，可单独使用。
+- `timefmt.go`: 共享时间编码器，根据 `Config.formDate`（`DATE_SEC` / `DATE_MSEC`）输出秒级或毫秒级时间戳。
+- `zlog.go`: 包对外 API（`F` / `Sync` / `Set*Level` / `SetConsoleOnly`）。
 
 结构化拆分后，业务逻辑保持不变，但更易于维护与扩展。
 
+### 日志文件命名与切割策略
+
+| 类型 | 文件路径 | 切割策略 |
+|------|----------|----------|
+| 业务日志 | `logs/<name>_info<YYYY-MM-DD>.log` + 软链 `logs/<name>_info.log` | 按时间，由 `WithRotationTime(hours)` 控制（默认 24h） |
+| 错误日志（共享） | `logs/<errorName><YYYY-MM-DD>.log` + 软链 `logs/<errorName>.log` | 同上；所有 logger 的 error 级别都汇入此文件（`registry.go:130-141`） |
+| `SetZapOut` 重定向 | `logs/<path><YYYY-MM-DD>.log` + 软链 | **特殊**：按 `WithRotationCount(7) + WithRotationSize(10MB)` 切割，与主日志策略不同（`zlog_unix.go:64-65`） |
+
+- `<name>` 由 `F("name")` 决定；`F()` 默认 logger 的 `<name>` 来自 `WithDefaultName` > 环境变量 `ZLOG_FILE_PREFIX` > `"log"`
+- `<errorName>` 由 `WithErrorName` 决定，未设置时默认派生为 `<name>_error`
+- 顶层 `zlog.Info/Error/...` 使用固定通道 `zlog`，所以会落在 `logs/zlog_info.log`
+
 ## 版本记录
+- `v1.0.6`: 文档同步（仅 README，无代码改动）
+  - 补全顶层快捷函数 `Info` / `Error` / `Debug` / `Warn` / `Panic` / `Fatal` 及对应 `*f` 形式的说明
+  - 补全 `SetEnv` / `SetConfig` 兼容入口与 `Manager.UpdateRetention` / `Manager.SetLevel` 实例方法
+  - 补全 `WithDefaultName` / `WithErrorName` 配置选项，并明确默认前缀解析顺序
+  - 补全 `WatchErrCallback` 完整示例 + 共享通道注意事项
+  - 补充 `F` 第二参数（调用栈深度调整）的使用方式
+  - 修正终端输出触发条件描述（`Env=ENV_DEBUG` 或 `Level=DebugLevel`）
+  - 修正 `SetZapOut` 切割策略（按数量+大小，与主日志按时间不同）与 `syslog.go` 用途描述
+  - 新增「日志文件命名与切割策略」小节
 - `v1.0.5`: 重大优化版本
   - **优化 f 字段显示策略**：
     - 终端输出固定显示 `f` 字段，默认 logger 显示 `f=log`，便于区分日志来源
