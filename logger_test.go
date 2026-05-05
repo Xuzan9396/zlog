@@ -46,6 +46,43 @@ func TestSyncUnknownLogger(t *testing.T) {
 	}
 }
 
+func TestSetLogDirAndWithLogDir(t *testing.T) {
+	orig := getConfig()
+	t.Cleanup(func() {
+		SetLog(
+			orig.Env,
+			WithMaxAge(orig.WithMaxAge),
+			WithRotationTime(orig.WithRotationTime),
+			WithDate(orig.formDate),
+			WithLogDir(orig.LogDir),
+		)
+	})
+
+	tempDir := t.TempDir()
+	mgr := NewManager(WithLogDir(tempDir), WithAutoCleanup(false))
+	if got := mgr.getConfig().LogDir; got != tempDir {
+		t.Fatalf("expected manager log dir %s, got %s", tempDir, got)
+	}
+	if got := logDir(); got != tempDir {
+		t.Fatalf("expected global log dir %s, got %s", tempDir, got)
+	}
+
+	nextDir := filepath.Join(t.TempDir(), "logs")
+	if err := mgr.SetLogDir(nextDir); err != nil {
+		t.Fatalf("SetLogDir failed: %v", err)
+	}
+	if got := mgr.getConfig().LogDir; got != nextDir {
+		t.Fatalf("expected updated manager log dir %s, got %s", nextDir, got)
+	}
+	if got := logDir(); got != nextDir {
+		t.Fatalf("expected updated global log dir %s, got %s", nextDir, got)
+	}
+
+	if err := SetLogDir(""); err == nil {
+		t.Fatal("expected error for empty log dir")
+	}
+}
+
 func TestSetZapOutWrites(t *testing.T) {
 	tempDir := t.TempDir()
 	target := filepath.Join(tempDir, "sys_log.log")

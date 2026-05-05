@@ -396,7 +396,11 @@ func main() {
 - 顶层 `zlog.Info/Error/...` 使用固定通道 `zlog`，所以会落在 `logs/zlog_info.log`
 
 ## 版本记录
-- `v1.0.6`: 文档同步（仅 README，无代码改动）
+- `v1.0.6`: 支持自定义日志目录，并同步文档
+  - 新增 `SetLogDir(dir)` 全局方法，支持运行时切换日志根目录
+  - 新增 `Manager.SetLogDir(dir)` 实例方法
+  - 新增 `WithLogDir(dir)` 配置选项，支持 `SetLog` / `NewManager` 初始化时指定日志目录
+  - 支持 `ZLOG_DIR` 和 `BITLOGIN_LOG_DIR` 环境变量覆盖默认日志目录
   - 补全顶层快捷函数 `Info` / `Error` / `Debug` / `Warn` / `Panic` / `Fatal` 及对应 `*f` 形式的说明
   - 补全 `SetEnv` / `SetConfig` 兼容入口与 `Manager.UpdateRetention` / `Manager.SetLevel` 实例方法
   - 补全 `WithDefaultName` / `WithErrorName` 配置选项，并明确默认前缀解析顺序

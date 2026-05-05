@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -12,6 +14,7 @@ import (
 var (
 	location = loadLocation()
 	logsDir  = defaultLogsDir()
+	logsMu   sync.RWMutex
 )
 
 // init 不再提前创建日志目录，而是在实际需要写入文件时才创建。
@@ -22,7 +25,19 @@ func init() {
 
 // logDir 返回当前使用的日志根目录。
 func logDir() string {
+	logsMu.RLock()
+	defer logsMu.RUnlock()
 	return logsDir
+}
+
+// setLogDir 修改全局日志目录（不创建），内部使用需确保非空。
+func setLogDir(dir string) {
+	if strings.TrimSpace(dir) == "" {
+		return
+	}
+	logsMu.Lock()
+	logsDir = dir
+	logsMu.Unlock()
 }
 
 // loadLocation 加载本地时区，失败时兜底为系统默认。
@@ -37,6 +52,14 @@ func loadLocation() *time.Location {
 // defaultLogsDir 根据系统选择默认日志目录。
 // 使用程序启动时的工作目录（运行目录）作为根目录。
 func defaultLogsDir() string {
+	// 环境变量优先
+	if env := strings.TrimSpace(os.Getenv("ZLOG_DIR")); env != "" {
+		return env
+	}
+	if env := strings.TrimSpace(os.Getenv("BITLOGIN_LOG_DIR")); env != "" {
+		return env
+	}
+
 	// 获取当前工作目录（程序运行目录）
 	cwd, err := os.Getwd()
 	if err != nil {

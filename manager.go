@@ -3,6 +3,7 @@ package zlog
 import (
 	"errors"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +38,9 @@ func NewManager(options ...LogOption) *Manager {
 	cfg := newDefaultConfig()
 	applyOptions(&cfg, options...)
 
+	setLogDir(cfg.LogDir)
+	_ = ensureDir(cfg.LogDir)
+
 	mgr := &Manager{
 		cfg:   cfg,
 		level: zap.NewAtomicLevelAt(cfg.Level),
@@ -63,6 +67,11 @@ func (m *Manager) SetLog(env Env, options ...LogOption) {
 	applyOptions(&cfg, options...)
 	m.cfg = cfg
 	m.cfgMu.Unlock()
+
+	// 应用日志目录变更
+	setLogDir(cfg.LogDir)
+	_ = ensureDir(cfg.LogDir)
+	m.registry.resetErrorWriter()
 
 	m.level.SetLevel(cfg.Level)
 	// 清除 logger 缓存，强制重新创建以应用新的输出配置
@@ -228,6 +237,29 @@ func (m *Manager) IsCleanupRunning() bool {
 	return m.cleanupTask.IsRunning()
 }
 
+// SetLogDir 修改日志根目录，立即生效。
+func (m *Manager) SetLogDir(dir string) error {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return errors.New("log dir is empty")
+	}
+	if err := ensureDir(dir); err != nil {
+		return err
+	}
+
+	setLogDir(dir)
+
+	m.cfgMu.Lock()
+	cfg := m.cfg
+	cfg.LogDir = dir
+	m.cfg = cfg
+	m.cfgMu.Unlock()
+
+	m.registry.reset()
+	m.registry.resetErrorWriter()
+	return nil
+}
+
 // getConfig 返回配置副本，供内部使用。
 func (m *Manager) getConfig() Config {
 	m.cfgMu.RLock()
@@ -250,6 +282,11 @@ func SetEnv(env string) {
 // SetConfig 兼容旧行为，仅调整保留和切割周期。
 func SetConfig(withMaxAge, withRotationTime int) {
 	getDefaultManager().UpdateRetention(withMaxAge, withRotationTime)
+}
+
+// SetLogDir 设置全局日志目录。
+func SetLogDir(dir string) error {
+	return getDefaultManager().SetLogDir(dir)
 }
 
 // getConfig 返回默认管理器的配置副本。

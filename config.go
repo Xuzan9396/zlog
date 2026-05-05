@@ -50,6 +50,7 @@ type Config struct {
 	ConsoleOnly       bool          // 仅输出到终端，不写入文件
 	AutoCleanup       bool          // 是否启用后台自动清理（默认 true）
 	CleanupInterval   time.Duration // 清理间隔（默认 24 小时）
+	LogDir            string        // 日志目录根路径
 }
 
 // LogOption 通过函数式选项修改配置。
@@ -78,6 +79,7 @@ func newDefaultConfig() Config {
 		prefix = defaultBaseName
 	}
 	errorName := prefix + "_error"
+	dir := defaultLogsDir()
 
 	return Config{
 		WithMaxAge:        10 * 24,
@@ -87,8 +89,9 @@ func newDefaultConfig() Config {
 		DefaultLoggerName: prefix,
 		ErrorLoggerName:   errorName,
 		formDate:          DATE_SEC,
-		AutoCleanup:       true,             // 默认启用自动清理
-		CleanupInterval:   24 * time.Hour,   // 默认每 24 小时清理一次
+		AutoCleanup:       true,           // 默认启用自动清理
+		CleanupInterval:   24 * time.Hour, // 默认每 24 小时清理一次
+		LogDir:            dir,
 	}
 }
 
@@ -170,6 +173,16 @@ func WithCleanupInterval(interval time.Duration) LogOption {
 	}
 }
 
+// WithLogDir 指定日志根目录（绝对或相对路径），适用于多进程/不可写 CWD 场景。
+func WithLogDir(dir string) LogOption {
+	return func(cfg *Config) {
+		dir = strings.TrimSpace(dir)
+		if dir != "" {
+			cfg.LogDir = dir
+		}
+	}
+}
+
 func normalizeName(name string) string {
 	return strings.TrimSpace(name)
 }
@@ -187,6 +200,9 @@ func applyOptions(cfg *Config, options ...LogOption) {
 	}
 	if cfg.ErrorLoggerName == "" {
 		cfg.ErrorLoggerName = cfg.DefaultLoggerName + "_error"
+	}
+	if cfg.LogDir == "" {
+		cfg.LogDir = defaultLogsDir()
 	}
 }
 
