@@ -2,6 +2,7 @@ package zlog
 
 import (
 	"log"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -10,9 +11,9 @@ import (
 )
 
 func TestSetLogAppliesOptions(t *testing.T) {
-	SetLog(ENV_DEBUG, WithMaxAge(12), WithRotationTime(6), WithDate(DATE_MSEC))
+	SetLog(ENV_DEBUG, WithMaxAge(12), WithRotationTime(6), WithDate(DATE_MSEC), WithConsoleOnly(false))
 	t.Cleanup(func() {
-		SetLog(ENV_PRO, WithMaxAge(10*24), WithRotationTime(24), WithDate(DATE_SEC))
+		SetLog(ENV_PRO, WithMaxAge(10*24), WithRotationTime(24), WithDate(DATE_SEC), WithConsoleOnly(false))
 	})
 
 	cfg := getConfig()
@@ -32,7 +33,7 @@ func TestSetLogAppliesOptions(t *testing.T) {
 		t.Fatalf("expected debug level, got %s", cfg.Level)
 	}
 
-	SetLog(ENV_PRO, WithMaxAge(12), WithRotationTime(6), WithDate(DATE_MSEC))
+	SetLog(ENV_PRO, WithMaxAge(12), WithRotationTime(6), WithDate(DATE_MSEC), WithConsoleOnly(false))
 	logger := F("setlog")
 	logger.Debug("test message")
 	if err := Sync("setlog"); err != nil {
@@ -80,6 +81,31 @@ func TestSetLogDirAndWithLogDir(t *testing.T) {
 
 	if err := SetLogDir(""); err == nil {
 		t.Fatal("expected error for empty log dir")
+	}
+}
+
+// TestNewManagerDefersLogDirCreation 验证只创建 Manager 不会污染工作目录或提前创建目标目录。
+// 例: 应用先完成配置、稍后首次写日志时，目录才由 Writer 创建。
+func TestNewManagerDefersLogDirCreation(t *testing.T) {
+	origDir := logDir()
+	t.Cleanup(func() { setLogDir(origDir) })
+	targetDir := filepath.Join(t.TempDir(), "deferred-logs")
+	mgr := NewManager(WithLogDir(targetDir), WithAutoCleanup(false))
+	t.Cleanup(mgr.StopCleanupTask)
+	// SetLog 只更新运行配置；应用尚未真正写日志时也不能产生目录副作用。
+	mgr.SetLog(ENV_PRO, WithMaxAge(2*24))
+
+	if _, err := os.Stat(targetDir); !os.IsNotExist(err) {
+		t.Fatalf("NewManager/SetLog 提前创建了日志目录，路径=%s，错误=%v", targetDir, err)
+	}
+
+	logger := mgr.Logger("deferred")
+	logger.Info("create on first write")
+	if err := mgr.Sync("deferred"); err != nil {
+		t.Fatalf("首次写入后同步日志失败: %v", err)
+	}
+	if info, err := os.Stat(targetDir); err != nil || !info.IsDir() {
+		t.Fatalf("首次写入没有创建日志目录，路径=%s，错误=%v", targetDir, err)
 	}
 }
 

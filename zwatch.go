@@ -142,9 +142,18 @@ func tailLogFile(ctx context.Context, filepath string) {
 		case <-ctx.Done(): // 检查context是否被取消
 			//log.Println("关闭了旧的日志监听", filepath)
 			return // 退出函数
-		case line := <-t.Lines: // 等待新的日志行
-			//log.Println("没有收到:", line.Text)
-			watch <- line.Text
+		case line, ok := <-t.Lines: // 等待新的日志行
+			// tail 在日志切换、文件移除或主动停止时会关闭通道并可能返回空行，
+			// 必须先判断通道和指针，避免监听退出阶段因解引用 nil 导致进程崩溃。
+			if !ok || line == nil {
+				return
+			}
+			// 转发也要响应取消；消费者暂时不读取且缓冲区已满时，旧监听仍能及时退出。
+			select {
+			case watch <- line.Text:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}
 }

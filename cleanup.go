@@ -14,6 +14,10 @@ import (
 // 包级正则表达式，避免重复编译
 var logDateRegex = regexp.MustCompile(`(\d{4}-\d{2}-\d{2})\.log(?:\.\d+)?$`)
 
+// file-rotatelogs 的 _lock/_symlink 只应在一次轮转期间短暂存在；
+// 超过一小时仍未完成可判定为进程异常退出后的残留，同时给慢磁盘留出足够安全余量。
+const staleRotationArtifactAge = time.Hour
+
 // clearLog 清理超出保留时长的旧日志文件，同时处理软链接。
 // 改进版本：扫描整个日志目录，清理所有过期文件（包括不再使用的 logger）
 func clearLog() {
@@ -75,8 +79,45 @@ func clearLogWithConfig(cfg *Config) {
 		}
 	}
 
+	// rotatelogs 自身会忽略 _lock/_symlink；进程在创建临时文件后异常退出时，
+	// 必须由 zlog 清理，否则文件监听器可能因为断开的软链接而无法启动。
+	cleanRotationArtifacts(logPath, now)
+
 	// 第二遍：清理所有已失效的软链接（避免因处理顺序导致遗留）
 	cleanInvalidSymlinks(logPath)
+}
+
+// cleanRotationArtifacts 清理滚动日志异常中断后遗留的临时文件。
+// 例: 断开的 foo.log_symlink 立即删除；仍有效但超过1小时的临时软链和旧 lock 也会删除。
+func cleanRotationArtifacts(dir string, now time.Time) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		fullPath := filepath.Join(dir, name)
+
+		switch {
+		case strings.HasSuffix(name, "_symlink") && entry.Type()&os.ModeSymlink != 0:
+			info, statErr := os.Lstat(fullPath)
+			if statErr != nil {
+				continue
+			}
+			// 断链不会再被 rotatelogs 使用，应立即删除；有效临时链只在超过安全窗口后清理。
+			if !isValidSymlink(fullPath) || now.Sub(info.ModTime()) > staleRotationArtifactAge {
+				_ = os.Remove(fullPath)
+			}
+		case strings.HasSuffix(name, "_lock") && entry.Type().IsRegular():
+			info, statErr := entry.Info()
+			if statErr != nil {
+				continue
+			}
+			if now.Sub(info.ModTime()) > staleRotationArtifactAge {
+				_ = os.Remove(fullPath)
+			}
+		}
+	}
 }
 
 // isLogFile 判断是否是日志文件
@@ -116,44 +157,9 @@ func cleanInvalidSymlinks(dir string) {
 			continue
 		}
 
-		// 如果仍有同前缀的实际日志文件（可能是硬链接或新文件）则保留
-		prefix := loggerPrefixFromLink(entry.Name())
-		if hasRegularLogWithPrefix(dir, prefix) {
-			continue
-		}
-
-		// 目标缺失且无同前缀文件，删除软链接
+		// 断开的软链接本身已不可用；同系列存在其他日志文件也不能让该链接恢复有效。
 		_ = os.Remove(fullPath)
 	}
-}
-
-// loggerPrefixFromLink 提取软链接名中的 logger 前缀（例如 log_info.log -> log）。
-func loggerPrefixFromLink(linkName string) string {
-	base := filepath.Base(linkName)
-	if idx := strings.Index(base, "_"); idx > 0 {
-		return base[:idx]
-	}
-	if idx := strings.Index(base, "."); idx > 0 {
-		return base[:idx]
-	}
-	return base
-}
-
-// hasRegularLogWithPrefix 检查目录下是否存在给定前缀的常规日志文件。
-func hasRegularLogWithPrefix(dir, prefix string) bool {
-	if prefix == "" {
-		return false
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return false
-	}
-	for _, e := range entries {
-		if e.Type().IsRegular() && strings.HasPrefix(e.Name(), prefix) && strings.Contains(e.Name(), ".log") {
-			return true
-		}
-	}
-	return false
 }
 
 // extractLogDate 从文件名提取日期

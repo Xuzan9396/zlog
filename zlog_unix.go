@@ -64,13 +64,14 @@ func (m *Manager) SetZapOut(fileName string) error {
 		rotatelogs.WithRotationCount(7),
 		rotatelogs.WithRotationSize(1024*1024*10),
 	)
+	// 创建失败时不能继续把空 writer 交给标准库日志，否则后续首次写入才会出现更难定位的异常。
+	if err != nil {
+		return err
+	}
 	var w zapcore.WriteSyncer
 	// 支持通过 Env 或 Level 来控制终端输出
 	if cfg.Env == ENV_DEBUG || cfg.Level == zapcore.DebugLevel {
-		w, err = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(fileWriter)), err
-		if err != nil {
-			return err
-		}
+		w = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(fileWriter))
 	} else {
 		w = zapcore.AddSync(fileWriter)
 	}

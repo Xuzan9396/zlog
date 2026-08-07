@@ -58,10 +58,10 @@ func TestCleanupRemovesBrokenSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 覆盖全局日志目录
-	origDir := logsDir
-	logsDir = tmpDir
+	origDir := logDir()
+	setLogDir(tmpDir)
 	defer func() {
-		logsDir = origDir
+		setLogDir(origDir)
 		_ = os.RemoveAll(tmpDir)
 	}()
 
@@ -101,6 +101,69 @@ func TestCleanupRemovesBrokenSymlink(t *testing.T) {
 		t.Fatalf("软链接被误删: %v", err)
 	}
 	t.Log("存在同前缀文件时软链接被保留")
+}
+
+// TestCleanupRemovesStaleRotationArtifacts 验证异常退出遗留的临时软链和锁文件会被清理。
+// 例: 断开的 _symlink 立即删除，旧 _lock 删除，仍在安全窗口内的新 _lock 保留。
+func TestCleanupRemovesStaleRotationArtifacts(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir := logDir()
+	setLogDir(tmpDir)
+	t.Cleanup(func() { setLogDir(origDir) })
+
+	brokenLink := filepath.Join(tmpDir, "log_error2026-07-27.log_symlink")
+	if err := os.Symlink("log_error2026-07-27.log", brokenLink); err != nil {
+		t.Fatal(err)
+	}
+	staleLock := filepath.Join(tmpDir, "log_error2026-07-27.log_lock")
+	freshLock := filepath.Join(tmpDir, "log_error2026-08-07.log_lock")
+	for _, path := range []string{staleLock, freshLock} {
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	staleTime := time.Now().Add(-2 * staleRotationArtifactAge)
+	if err := os.Chtimes(staleLock, staleTime, staleTime); err != nil {
+		t.Fatal(err)
+	}
+
+	clearLogWithConfig(&Config{WithMaxAge: 48})
+
+	for _, path := range []string{brokenLink, staleLock} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("滚动日志残留未删除，路径=%s，错误=%v", path, err)
+		}
+	}
+	if _, err := os.Stat(freshLock); err != nil {
+		t.Fatalf("仍在安全窗口内的锁文件被误删: %v", err)
+	}
+}
+
+// TestCleanupKeepsFortyEightHourBoundary 验证 WithMaxAge(2*24) 保留48小时边界内日志。
+// 例: 两天前的日志保留，三天前的日志删除。
+func TestCleanupKeepsFortyEightHourBoundary(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir := logDir()
+	setLogDir(tmpDir)
+	t.Cleanup(func() { setLogDir(origDir) })
+
+	now := time.Now().In(location)
+	withinBoundary := filepath.Join(tmpDir, "log_info"+now.AddDate(0, 0, -2).Format("2006-01-02")+".log")
+	expired := filepath.Join(tmpDir, "log_info"+now.AddDate(0, 0, -3).Format("2006-01-02")+".log")
+	for _, path := range []string{withinBoundary, expired} {
+		if err := os.WriteFile(path, []byte("log"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	clearLogWithConfig(&Config{WithMaxAge: 2 * 24})
+
+	if _, err := os.Stat(withinBoundary); err != nil {
+		t.Fatalf("48小时边界内日志被误删: %v", err)
+	}
+	if _, err := os.Stat(expired); !os.IsNotExist(err) {
+		t.Fatalf("超过48小时日志未删除，错误=%v", err)
+	}
 }
 
 // TestManualCleanup 测试手动清理

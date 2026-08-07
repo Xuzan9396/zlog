@@ -26,9 +26,11 @@ var (
 	defaultManagerOnce sync.Once
 )
 
-func getDefaultManager() *Manager {
+// getDefaultManager 在首次创建全局管理器时接受配置选项。
+// 例: 第一次调用 SetLogDir("/safe/logs") 时直接使用目标目录初始化，避免先创建当前工作目录下的 logs。
+func getDefaultManager(options ...LogOption) *Manager {
 	defaultManagerOnce.Do(func() {
-		defaultManager = NewManager()
+		defaultManager = NewManager(options...)
 	})
 	return defaultManager
 }
@@ -39,7 +41,6 @@ func NewManager(options ...LogOption) *Manager {
 	applyOptions(&cfg, options...)
 
 	setLogDir(cfg.LogDir)
-	_ = ensureDir(cfg.LogDir)
 
 	mgr := &Manager{
 		cfg:   cfg,
@@ -70,7 +71,6 @@ func (m *Manager) SetLog(env Env, options ...LogOption) {
 
 	// 应用日志目录变更
 	setLogDir(cfg.LogDir)
-	_ = ensureDir(cfg.LogDir)
 	m.registry.resetErrorWriter()
 
 	m.level.SetLevel(cfg.Level)
@@ -271,7 +271,9 @@ func (m *Manager) getConfig() Config {
 
 // SetLog 是兼容旧行为的全局入口。
 func SetLog(env Env, options ...LogOption) {
-	getDefaultManager().SetLog(env, options...)
+	// 首次调用若携带 WithLogDir，必须让默认管理器从目标目录初始化；
+	// 不这样做会先按进程工作目录生成一个无用的 logs 目录。
+	getDefaultManager(options...).SetLog(env, options...)
 }
 
 // SetEnv 兼容旧行为，等价于 SetLog。
@@ -286,7 +288,12 @@ func SetConfig(withMaxAge, withRotationTime int) {
 
 // SetLogDir 设置全局日志目录。
 func SetLogDir(dir string) error {
-	return getDefaultManager().SetLogDir(dir)
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return errors.New("log dir is empty")
+	}
+	// SetLogDir 可能是应用启动后的第一个 zlog API，初始化选项必须与后续运行目录一致。
+	return getDefaultManager(WithLogDir(dir)).SetLogDir(dir)
 }
 
 // getConfig 返回默认管理器的配置副本。
